@@ -28,7 +28,9 @@ This is a blank project for CDK development with TypeScript.
 
 The `cdk.json` file tells the CDK Toolkit how to execute your app.
 
-sh lambda/build.sh
+cd lambda
+
+sh build.sh
 
 npm install
 
