@@ -1,165 +1,126 @@
 import json
-import boto3
-import os
 import base64
 import uuid
-from botocore.exceptions import ClientError
+from datetime import datetime
+from fastapi import FastAPI, HTTPException
+from mangum import Mangum
 
-s3 = boto3.client('s3')
-bedrock = boto3.client('bedrock-runtime')
-aoss = boto3.client('opensearchserverless')
+from models.api_response import APIResponse
+from models.request_models import ImageUploadRequest, ImageUpdateRequest, ImageSearchRequest
+from utils.config import Config
+from utils.aws_client_factory import AWSClientFactory
+from services.opensearch_client import OpenSearchClient
+from services.embedding_generator import EmbeddingGenerator
 
-BUCKET_NAME = os.environ['BUCKET_NAME']
-COLLECTION_NAME = os.environ['COLLECTION_NAME']
+# FastAPI app
+app = FastAPI(title="Image Processing API")
 
-def handler(event, context):
-    http_method = event['httpMethod']
-    path = event['path']
-    
-    if http_method == 'POST' and path == '/images':
-        return upload_image(event)
-    elif http_method == 'PUT' and path == '/images':
-        return update_image(event)
-    elif http_method == 'DELETE' and path == '/images':
-        return delete_image(event)
-    elif http_method == 'POST' and path == '/images/search':
-        return search_images(event)
-    else:
-        return {
-            'statusCode': 400,
-            'body': json.dumps('Invalid endpoint')
-        }
+# Initialize clients
+s3_client = AWSClientFactory.create_s3_client()
+bedrock_client = AWSClientFactory.create_bedrock_runtime_client()
+opensearch_client = OpenSearchClient()
+embedding_generator = EmbeddingGenerator(bedrock_client)
 
-def upload_image(event):
+# Ensure OpenSearch index exists
+opensearch_client.ensure_index_exists()
+
+@app.post("/images")
+async def upload_image(request: ImageUploadRequest) -> APIResponse:
     try:
-        body = json.loads(event['body'])
-        image_data = base64.b64decode(body['image'])
-        description = body.get('description', '')
-        tags = body.get('tags', [])
-
-        # Generate a unique ID for the image
+        image_data = base64.b64decode(request.image)
         image_id = str(uuid.uuid4())
-        
-        # Upload image to S3
-        s3.put_object(Bucket=BUCKET_NAME, Key=f"{image_id}.jpg", Body=image_data)
-        
-        # Generate image embedding using Bedrock
-        embedding = generate_embedding(image_data)
-        
-        # Index the image metadata and embedding in OpenSearch
+        s3_key = f'images/{image_id}'
+
+        # Upload to S3
+        s3_client.put_object(
+            Bucket=Config.BUCKET_NAME,
+            Key=s3_key,
+            Body=image_data,
+            ContentType='image/jpeg'
+        )
+
+        # Generate embedding
+        embedding = embedding_generator.generate_embedding(image_data, 'image')
+
+        # Index in OpenSearch
         document = {
             'id': image_id,
-            'description': description,
-            'tags': tags,
-            'embedding': embedding
+            'description': request.description,
+            'tags': request.tags,
+            'vector_field': embedding,
+            's3_key': s3_key
         }
-        index_document(document)
-        
-        return {
-            'statusCode': 200,
-            'body': json.dumps({'message': 'Image uploaded successfully', 'id': image_id})
-        }
-    except Exception as e:
-        return {
-            'statusCode': 500,
-            'body': json.dumps({'error': str(e)})
-        }
+        opensearch_client.index_document(document)
 
-def update_image(event):
-    try:
-        body = json.loads(event['body'])
-        image_id = body['id']
-        description = body.get('description')
-        tags = body.get('tags')
-        
-        # Update the image metadata in OpenSearch
-        update_document(image_id, description, tags)
-        
-        return {
-            'statusCode': 200,
-            'body': json.dumps({'message': 'Image metadata updated successfully'})
-        }
+        return APIResponse(
+            code=200,
+            message="Image uploaded successfully",
+            data={"image_id": image_id},
+            timestamp=datetime.utcnow().isoformat()
+        )
     except Exception as e:
-        return {
-            'statusCode': 500,
-            'body': json.dumps({'error': str(e)})
-        }
+        raise HTTPException(status_code=500, detail=str(e))
 
-def delete_image(event):
+@app.put("/images")
+async def update_image(request: ImageUpdateRequest) -> APIResponse:
     try:
-        body = json.loads(event['body'])
-        image_id = body['id']
-        
-        # Delete the image from S3
-        s3.delete_object(Bucket=BUCKET_NAME, Key=f"{image_id}.jpg")
-        
-        # Remove the image metadata from OpenSearch
-        delete_document(image_id)
-        
-        return {
-            'statusCode': 200,
-            'body': json.dumps({'message': 'Image deleted successfully'})
-        }
+        opensearch_client.update_document(
+            request.image_id,
+            request.description,
+            request.tags
+        )
+
+        return APIResponse(
+            code=200,
+            message="Image metadata updated successfully",
+            data={"image_id": request.image_id},
+            timestamp=datetime.utcnow().isoformat()
+        )
     except Exception as e:
-        return {
-            'statusCode': 500,
-            'body': json.dumps({'error': str(e)})
-        }
+        raise HTTPException(status_code=500, detail=str(e))
 
-def search_images(event):
+@app.post("/images/search")
+async def search_images(request: ImageSearchRequest) -> APIResponse:
     try:
-        body = json.loads(event['body'])
-        query_type = body['type']
-        query = body['query']
-        
-        if query_type == 'text':
-            results = text_search(query)
-        elif query_type == 'image':
-            image_data = base64.b64decode(query)
-            embedding = generate_embedding(image_data)
-            results = image_search(embedding)
+        if request.query_image:
+            query_image = base64.b64decode(request.query_image)
+            query_embedding = embedding_generator.generate_embedding(query_image, 'image')
+        elif request.query_text:
+            query_embedding = embedding_generator.generate_embedding(request.query_text, 'text')
         else:
-            return {
-                'statusCode': 400,
-                'body': json.dumps({'error': 'Invalid search type'})
-            }
-        
-        return {
-            'statusCode': 200,
-            'body': json.dumps({'results': results})
-        }
+            raise HTTPException(status_code=400, detail="Either query_image or query_text must be provided")
+
+        results = opensearch_client.query_opensearch(query_embedding, request.k)
+
+        return APIResponse(
+            code=200,
+            message="Search completed successfully",
+            data={"results": results},
+            timestamp=datetime.utcnow().isoformat()
+        )
     except Exception as e:
-        return {
-            'statusCode': 500,
-            'body': json.dumps({'error': str(e)})
-        }
+        raise HTTPException(status_code=500, detail=str(e))
 
-def generate_embedding(image_data):
-    # TODO: Implement Bedrock API call to generate image embedding
-    # This is a placeholder and should be replaced with actual Bedrock API call
-    return [0.1, 0.2, 0.3]  # Placeholder embedding
+@app.delete("/images/{image_id}")
+async def delete_image(image_id: str) -> APIResponse:
+    try:
+        # Delete from OpenSearch
+        opensearch_client.delete_document(image_id)
 
-def index_document(document):
-    # TODO: Implement OpenSearch indexing
-    # This is a placeholder and should be replaced with actual OpenSearch API call
-    pass
+        # Delete from S3
+        s3_client.delete_object(
+            Bucket=Config.BUCKET_NAME,
+            Key=f'images/{image_id}'
+        )
 
-def update_document(image_id, description, tags):
-    # TODO: Implement OpenSearch document update
-    # This is a placeholder and should be replaced with actual OpenSearch API call
-    pass
+        return APIResponse(
+            code=200,
+            message="Image deleted successfully",
+            data={"image_id": image_id},
+            timestamp=datetime.utcnow().isoformat()
+        )
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
-def delete_document(image_id):
-    # TODO: Implement OpenSearch document deletion
-    # This is a placeholder and should be replaced with actual OpenSearch API call
-    pass
-
-def text_search(query):
-    # TODO: Implement text search in OpenSearch
-    # This is a placeholder and should be replaced with actual OpenSearch API call
-    return []
-
-def image_search(embedding):
-    # TODO: Implement image search in OpenSearch using vector similarity
-    # This is a placeholder and should be replaced with actual OpenSearch API call
-    return []
+# Lambda handler
+handler = Mangum(app)
