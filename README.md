@@ -1,7 +1,5 @@
 # Images 多模态RAG 应用Workshop
 
-
-
 #### 业务背景
 
 电商场景中，用户希望通过输入图片，用以图搜图/文搜图/图+文搜图的方式可快速在图片库中检索到与输入图片相似的图片集合。可广泛应用于拍照购物、商品推荐、电商选品、产品设计管理等场景。
@@ -29,6 +27,14 @@
 This is a blank project for CDK development with TypeScript.
 
 The `cdk.json` file tells the CDK Toolkit how to execute your app.
+
+cd lambda
+
+sh build.sh
+
+npm install
+
+cdk deploy
 
 ## Useful commands
 

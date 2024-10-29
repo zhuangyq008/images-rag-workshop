@@ -42,16 +42,31 @@ export class CdkImageProcessingStack extends cdk.Stack {
     // Ensure the collection is created after the encryption policy
     collection.addDependency(encryptionPolicy);
 
+    // Create Lambda layer with dependencies
+    const dependenciesLayer = new lambda.LayerVersion(this, 'DependenciesLayer', {
+      code: lambda.Code.fromAsset('lambda/lambda_layer'),
+      compatibleRuntimes: [lambda.Runtime.PYTHON_3_10],
+      description: 'Dependencies for image processing lambda',
+    });
+
     // Create Lambda function
     const imageProcessingFunction = new lambda.Function(this, 'ImageProcessingFunction', {
       runtime: lambda.Runtime.PYTHON_3_10,
       handler: 'index.handler',
       code: lambda.Code.fromAsset('lambda'),
+      layers: [dependenciesLayer],
+      memorySize: 512,
       environment: {
         BUCKET_NAME: imageBucket.bucketName,
         COLLECTION_NAME: collection.name,
+        OPENSEARCH_ENDPOINT: collection.attrCollectionEndpoint,
       },
       timeout: cdk.Duration.seconds(30),
+    });
+
+    // Get current IAM user ARN
+    const currentUser = new iam.User(this, 'CurrentUser', {
+      userName: process.env.USER || 'default-user'
     });
 
     // Create OpenSearch Serverless data access policy
@@ -61,7 +76,7 @@ export class CdkImageProcessingStack extends cdk.Stack {
       description: 'Data access policy for image collection',
       policy: JSON.stringify([
         {
-          Description: "Allow Lambda function to access the collection",
+          Description: "Allow Lambda function and current user to access the collection",
           Rules: [
             {
               ResourceType: 'index',
@@ -86,7 +101,10 @@ export class CdkImageProcessingStack extends cdk.Stack {
               ],
             },
           ],
-          Principal: [imageProcessingFunction.role!.roleArn],
+          Principal: [
+            imageProcessingFunction.role!.roleArn,
+            currentUser.userArn  // Add current user's ARN
+          ],
         },
       ]),
     });
