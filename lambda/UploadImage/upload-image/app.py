@@ -8,17 +8,18 @@ import urllib.request
 import base64
 from PIL import Image
 import os
+import datetime
 
 # global variable
 host = os.environ['ENDPOINT']
 service = "es"
 region = os.environ['REGION']
-s3_bucket = os.environ['S3_BUCKET'] # read from environment variable
+s3_bucket = os.environ['S3_BUCKET']
 credentials = boto3.Session().get_credentials()
 auth = AWSV4SignerAuth(credentials, region, 'es')
-model_id = os.environ['MODEL_ID'] # read from environment variable
-image_name = os.environ['IMAGE_NAME'] # read from environment variable
-
+model_id = os.environ['MODEL_ID']
+image_name = os.environ['IMAGE_NAME']
+index = os.environ['INDEX']
 # client
 ## Initialise OpenSearch-py client
 aos_client = OpenSearch(
@@ -145,17 +146,28 @@ def lambda_handler(event, context):
     payload["image_description"] = generate_description()
 
     # index
-    response = aos_client.index(
-        index = 'multi-index',
-        body = payload
-    )
+    try:
+        response = aos_client.index(
+            index = index,
+            body = payload
+        )
+        if response['result'] == 'created':
+            return {
+                "statusCode": 200,
+                "body": json.dumps({
+                    "code": 200,
+                    "message": "success",
+                    "data": {
+                        "_index": response["_index"],
+                        "_id": response["_id"],
+                        "_version": response["_version"]
+                    },
+                    "timestamp": datetime.datetime.now().strftime("%m/%d/%Y, %H:%M:%S")
+                }),
+            }
+        else:
+            return("ERROR: " + response['result'])
 
-    print(response)
-
-    return {
-        "statusCode": 200,
-        "body": json.dumps({
-            "message": "hello world",
-            # "location": ip.text.replace("\n", "")
-        }),
-    }
+    except Exception as e:
+        return(f"ERROR: {e}")
+        exit(1)

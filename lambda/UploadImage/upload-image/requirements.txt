@@ -2,3 +2,4 @@ requests
 requests_aws4auth
 opensearch-py
 pillow
+DateTime
