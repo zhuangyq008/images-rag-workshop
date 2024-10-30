@@ -24,6 +24,7 @@ from services.embedding_generator import EmbeddingGenerator
 # Configure logging
 logger = logging.getLogger()
 logger.setLevel(logging.INFO)
+logger.addHandler(logging.StreamHandler())
 
 # FastAPI app
 app = FastAPI(title="Image Processing API")

@@ -56,9 +56,9 @@ class OpenSearchClient:
     def index_document(self, document):
         index_name = f"{Config.COLLECTION_NAME}-index"
         try:
+            print(f"Indexing document: {document['id']}")
             response = self.client.index(
                 index=index_name,
-                id=document['id'],
                 body=document
             )
             return response

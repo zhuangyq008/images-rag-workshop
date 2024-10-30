@@ -135,17 +135,7 @@ export class CdkImageProcessingStack extends cdk.Stack {
     }));
     imageProcessingFunction.addToRolePolicy(new iam.PolicyStatement({
       actions: [
-        'aoss:CreateIndex',
-        'aoss:DeleteIndex',
-        'aoss:UpdateIndex',
-        'aoss:DescribeIndex',
-        'aoss:ReadDocument',
-        'aoss:WriteDocument',
-        'aoss:CreateCollectionItems',
-        'aoss:DeleteCollectionItems',
-        'aoss:UpdateCollectionItems',
-        'aoss:DescribeCollectionItems',
-        'aoss:SearchCollectionItems',
+        'aoss:*'
       ],
       resources: [collection.attrArn],
     }));

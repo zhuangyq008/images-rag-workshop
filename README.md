@@ -22,6 +22,12 @@
 
 ![1729170049892](image/README/1729170049892.png)
 
+## 本地开发说明
+
+cd lambda
+
+uvicorn index:app --reload
+
 ## 部署说明
 
 This is a blank project for CDK development with TypeScript.
@@ -31,6 +37,8 @@ The `cdk.json` file tells the CDK Toolkit how to execute your app.
 cd lambda
 
 sh build.sh
+
+cd ..
 
 npm install
 
