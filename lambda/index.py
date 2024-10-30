@@ -20,6 +20,7 @@ from utils.exceptions import (
 )
 from services.opensearch_client import OpenSearchClient
 from services.embedding_generator import EmbeddingGenerator
+from services.image_retrieve import ImageRetrieve
 
 # Configure logging
 logger = logging.getLogger()
@@ -34,6 +35,7 @@ s3_client = AWSClientFactory.create_s3_client()
 bedrock_client = AWSClientFactory.create_bedrock_runtime_client()
 opensearch_client = OpenSearchClient()
 embedding_generator = EmbeddingGenerator(bedrock_client)
+image_retrieve = ImageRetrieve(embedding_generator, opensearch_client)
 
 logger.info("Initializing application and clients")
 
@@ -199,18 +201,16 @@ async def search_images(request: ImageSearchRequest) -> APIResponse:
             try:
                 logger.info("Processing image-based search")
                 query_image = base64.b64decode(request.query_image)
-                query_embedding = embedding_generator.generate_embedding(query_image, 'image')
-                logger.info("Successfully generated query image embedding")
+                results = image_retrieve.search_by_image(query_image, request.k)
+                logger.info("Successfully completed image-based search")
             except Exception as e:
                 logger.error(f"Failed to process query image: {str(e)}")
                 raise InvalidRequestError("Invalid image data format", {"detail": str(e)})
         else:
             logger.info("Processing text-based search")
-            query_embedding = embedding_generator.generate_embedding(request.query_text, 'text')
-            logger.info("Successfully generated query text embedding")
+            results = image_retrieve.search_by_text(request.query_text, request.k)
+            logger.info("Successfully completed text-based search")
 
-        logger.info("Executing OpenSearch query")
-        results = opensearch_client.query_opensearch(query_embedding, request.k)
         logger.info(f"Search completed successfully, found {len(results)} results")
 
         return APIResponse.success(
