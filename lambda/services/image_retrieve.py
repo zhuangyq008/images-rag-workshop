@@ -2,7 +2,6 @@ from typing import List, Dict, Union
 from fastapi import HTTPException
 from .embedding_generator import EmbeddingGenerator
 from .opensearch_client import OpenSearchClient
-from PIL import Image
 import io
 
 class ImageRetrieve:

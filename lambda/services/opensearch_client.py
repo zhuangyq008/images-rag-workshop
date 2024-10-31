@@ -89,7 +89,7 @@ class OpenSearchClient:
             raise HTTPException(status_code=500, detail=f"Error updating document: {str(e)}")
 
     def delete_document(self, image_id):
-        index_name = f"{Config.COLLECTION_NAME}-index"
+        index_name = Config.COLLECTION_INDEX_NAME
         try:
             response = self.client.delete(
                 index=index_name,

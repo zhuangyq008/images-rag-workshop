@@ -193,7 +193,7 @@ class ImageProcessingAPITest:
 
 def main():
     # API测试示例
-    api_url = "http://127.0.0.1:8000"
+    api_url = os.environ.get('API_URL', 'http://127.0.0.1:8000')
     api_test = ImageProcessingAPITest(api_url)
     
     # 测试上传图片
