@@ -28,7 +28,7 @@ class OpenSearchClient:
         )
 
     def ensure_index_exists(self):
-        index_name = f"{Config.COLLECTION_NAME}-index"
+        index_name = Config.COLLECTION_INDEX_NAME
         if not self.client.indices.exists(index=index_name):
             settings = {
                 "settings": {
@@ -38,15 +38,21 @@ class OpenSearchClient:
                 },
                 "mappings": {
                     "properties": {
-                        "id": {"type": "keyword"},
+                        "id": {"type": "text"},
+                        "name": {"type": "text"},
                         "description": {"type": "text"},
-                        "tags": {"type": "keyword"},
-                        "vector_field": {
+                        "createtime": {"type": "text"},
+                        "image_path":{"type": "text"},
+                        "image_embedding": {
                             "type": "knn_vector",
                             "dimension": Config.VECTOR_DIMENSION,
-                        }
+                        },
+                        "description_embedding": {
+                            "type": "knn_vector",
+                            "dimension": Config.VECTOR_TEXT_DIMENSION,
+                        }                    
                     }
-                }
+                },
             }
             try:
                 self.client.indices.create(index=index_name, body=settings)
@@ -54,7 +60,7 @@ class OpenSearchClient:
                 raise HTTPException(status_code=500, detail=f"Error creating index: {str(e)}")
 
     def index_document(self, document):
-        index_name = f"{Config.COLLECTION_NAME}-index"
+        index_name = Config.COLLECTION_INDEX_NAME
         try:
             print(f"Indexing document: {document['id']}")
             response = self.client.index(
@@ -66,7 +72,7 @@ class OpenSearchClient:
             raise HTTPException(status_code=500, detail=f"Error indexing document: {str(e)}")
 
     def update_document(self, image_id, description, tags):
-        index_name = f"{Config.COLLECTION_NAME}-index"
+        index_name = Config.COLLECTION_INDEX_NAME
         try:
             response = self.client.update(
                 index=index_name,
@@ -92,14 +98,14 @@ class OpenSearchClient:
             return response
         except Exception as e:
             raise HTTPException(status_code=500, detail=f"Error deleting document: {str(e)}")
-
-    def query_opensearch(self, embedding, k):
-        index_name = f"{Config.COLLECTION_NAME}-index"
+    # default type is image embedding
+    def query_by_image(self, embedding, k):
+        index_name = Config.COLLECTION_INDEX_NAME
         query = {
             'size': k,
             'query': {
                 'knn': {
-                    'vector_field': {
+                    'image_embedding': {
                         'vector': embedding,
                         'k': k
                     }
@@ -117,7 +123,83 @@ class OpenSearchClient:
                     'id': hit['_id'],
                     'score': hit['_score'],
                     'description': hit['_source']['description'],
-                    'tags': hit['_source']['tags']
+                    'image_path': hit['_source']['image_path']
+                }
+                for hit in hits
+            ]
+        except Exception as e:
+            raise HTTPException(status_code=500, detail=f"Error querying OpenSearch: {str(e)}")
+
+    def query_by_text(self, embedding, k):
+        index_name = Config.COLLECTION_INDEX_NAME
+        query = {
+            'size': k,
+            'query': {
+                'knn': {
+                    'description_embedding': {
+                        'vector': embedding,
+                        'k': k
+                    }
+                }
+            }
+        }
+        try:
+            response = self.client.search(
+                index=index_name,
+                body=query
+            )
+            hits = response['hits']['hits']
+            return [
+                {
+                    'id': hit['_id'],
+                    'score': hit['_score'],
+                    'description': hit['_source']['description'],
+                    'image_path': hit['_source']['image_path']
+                }
+                for hit in hits
+            ]
+        except Exception as e:
+            raise HTTPException(status_code=500, detail=f"Error querying OpenSearch: {str(e)}")
+
+    def query_by_text_and_image(self, text_embedding, image_embedding,k):
+        index_name = Config.COLLECTION_INDEX_NAME
+        query = {
+            'size': k,
+            'query': {
+                'bool': {
+                    'must': [
+                        {
+                            'knn': {
+                                'image_embedding': {
+                                    'vector': image_embedding,
+                                    'k': k
+                                }
+                            }
+                        },
+                        {
+                            'knn': {
+                                'description_embedding': {
+                                    'vector': text_embedding,
+                                    'k': k
+                                }
+                            }
+                        }
+                    ]
+                }
+            }
+        }
+        try:
+            response = self.client.search(
+                index=index_name,
+                body=query
+            )
+            hits = response['hits']['hits']
+            return [
+                {
+                    'id': hit['_id'],
+                    'score': hit['_score'],
+                    'description': hit['_source']['description'],
+                    'image_path': hit['_source']['image_path']
                 }
                 for hit in hits
             ]

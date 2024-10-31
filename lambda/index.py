@@ -2,10 +2,11 @@ import json
 import base64
 import uuid
 import logging
-from datetime import datetime
+import datetime
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import JSONResponse
 from mangum import Mangum
+import traceback
 
 from models.api_response import APIResponse
 from models.request_models import ImageUploadRequest, ImageUpdateRequest, ImageSearchRequest
@@ -21,6 +22,7 @@ from utils.exceptions import (
 from services.opensearch_client import OpenSearchClient
 from services.embedding_generator import EmbeddingGenerator
 from services.image_retrieve import ImageRetrieve
+from services.img_descn_generator import enrich_image_desc
 
 # Configure logging
 logger = logging.getLogger()
@@ -113,25 +115,38 @@ async def upload_image(request: ImageUploadRequest) -> APIResponse:
         except Exception as e:
             logger.error(f"Failed to upload image to S3: {str(e)}")
             raise ImageUploadError("Failed to upload image to S3", {"detail": str(e)})
-
+        # Generate description
+        description = ''
+        try:
+            logger.info("Starting description generation")
+            description = enrich_image_desc(request.image)
+            logger.info("Successfully generated description")
+        except Exception as e:
+            logger.error(f"Failed to generate description: {str(e)}")
+            raise ImageUploadError("Failed to generate description", {"detail": str(e)})
         # Generate embedding
         try:
             logger.info("Starting embedding generation")
-            embedding = embedding_generator.generate_embedding(image_data, 'image')
+            embedding = embedding_generator.generate_embedding(request.image, 'image')
+            description_embedding = embedding_generator.generate_embedding(description, 'text')
             logger.info("Successfully generated image embedding")
         except Exception as e:
+            tb_str = traceback.format_exc()
             logger.error(f"Failed to generate image embedding: {str(e)}")
+            print(tb_str)
             raise ImageUploadError("Failed to generate image embedding", {"detail": str(e)})
 
         # Index in OpenSearch
         try:
+            dt = datetime.datetime.now().isoformat()
             document = {
-                'id': image_id,
-                'description': request.description,
-                'tags': request.tags,
-                'vector_field': embedding,
-                's3_key': s3_key
-            }
+                    'id': image_id,
+                    'description': description,
+                    'image_embedding': embedding,
+                    'description_embedding': description_embedding,
+                    'createtime': dt,
+                    'image_path': s3_key
+            }                           
             logger.info(f"Indexing document in OpenSearch: {image_id}")
             opensearch_client.index_document(document)
             logger.info(f"Successfully indexed document in OpenSearch: {image_id}")
@@ -197,19 +212,24 @@ async def search_images(request: ImageSearchRequest) -> APIResponse:
                 }}
             )
 
-        if request.query_image:
+        if request.query_image and not request.query_text :
             try:
                 logger.info("Processing image-based search")
-                query_image = base64.b64decode(request.query_image)
-                results = image_retrieve.search_by_image(query_image, request.k)
+
+                results = image_retrieve.search_by_image(request.query_image, request.k)
                 logger.info("Successfully completed image-based search")
             except Exception as e:
                 logger.error(f"Failed to process query image: {str(e)}")
+                tb_str = traceback.format_exc()
+                print(tb_str)
                 raise InvalidRequestError("Invalid image data format", {"detail": str(e)})
-        else:
+        elif request.query_text and not request.query_image:
             logger.info("Processing text-based search")
             results = image_retrieve.search_by_text(request.query_text, request.k)
             logger.info("Successfully completed text-based search")
+        elif request.query_image and request.query_text:
+             logger.info("Processing text-image-combined search")
+             results = image_retrieve.search_by_text_and_image(request.query_text, request.query_image, request.k)
 
         logger.info(f"Search completed successfully, found {len(results)} results")
 

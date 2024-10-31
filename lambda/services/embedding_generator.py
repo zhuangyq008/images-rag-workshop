@@ -10,19 +10,16 @@ class EmbeddingGenerator:
     def generate_embedding(self, data, mode):
         if mode == 'text':
             body = json.dumps({
-                "inputText": data,
-                "embeddingConfig": {
-                    "outputEmbeddingLength": Config.VECTOR_DIMENSION
-                }
-            }).encode('utf-8')
+                "inputText": data
+            })
             model_id = "amazon.titan-embed-text-v1"
         elif mode == 'image':
             body = json.dumps({
-                "inputImage": base64.b64encode(data).decode('utf-8'),
+                "inputImage": data,
                 "embeddingConfig": {
                     "outputEmbeddingLength": Config.VECTOR_DIMENSION
                 }
-            }).encode('utf-8')
+            })
             model_id = "amazon.titan-embed-image-v1"
         else:
             raise HTTPException(status_code=400, detail="Invalid mode. Use 'text' or 'image'.")

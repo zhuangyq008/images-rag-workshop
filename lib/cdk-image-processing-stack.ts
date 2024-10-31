@@ -4,6 +4,8 @@ import * as apigateway from 'aws-cdk-lib/aws-apigateway';
 import * as lambda from 'aws-cdk-lib/aws-lambda';
 import * as iam from 'aws-cdk-lib/aws-iam';
 import * as s3 from 'aws-cdk-lib/aws-s3';
+import * as cloudfront from 'aws-cdk-lib/aws-cloudfront';
+import * as origins from 'aws-cdk-lib/aws-cloudfront-origins';
 import * as opensearchserverless from 'aws-cdk-lib/aws-opensearchserverless';
 
 export class CdkImageProcessingStack extends cdk.Stack {
@@ -15,6 +17,7 @@ export class CdkImageProcessingStack extends cdk.Stack {
       bucketName: `imagebucket-${this.account}-${this.region}`,
       versioned: true,
       encryption: s3.BucketEncryption.S3_MANAGED,
+      blockPublicAccess: s3.BlockPublicAccess.BLOCK_ALL,
     });
 
     // Create OpenSearch Serverless encryption policy
@@ -64,10 +67,8 @@ export class CdkImageProcessingStack extends cdk.Stack {
       timeout: cdk.Duration.seconds(30),
     });
 
-    // Get current IAM user ARN
-    const currentUser = new iam.User(this, 'CurrentUser', {
-      userName: process.env.USER || 'default-user'
-    });
+    // Get caller identity ARN from context
+    const callerArn = this.node.tryGetContext('callerArn') || cdk.Fn.importValue('CallerArn');
 
     // Create OpenSearch Serverless data access policy
     const dataAccessPolicy = new opensearchserverless.CfnAccessPolicy(this, 'CollectionDataAccessPolicy', {
@@ -76,7 +77,7 @@ export class CdkImageProcessingStack extends cdk.Stack {
       description: 'Data access policy for image collection',
       policy: JSON.stringify([
         {
-          Description: "Allow Lambda function and current user to access the collection",
+          Description: "Allow Lambda function and caller to access the collection",
           Rules: [
             {
               ResourceType: 'index',
@@ -103,7 +104,7 @@ export class CdkImageProcessingStack extends cdk.Stack {
           ],
           Principal: [
             imageProcessingFunction.role!.roleArn,
-            currentUser.userArn  // Add current user's ARN
+            callerArn  // Add caller's ARN
           ],
         },
       ]),
@@ -178,5 +179,6 @@ export class CdkImageProcessingStack extends cdk.Stack {
       value: imageBucket.bucketName,
       description: 'The name of the S3 bucket for image storage',
     });
+
   }
 }
