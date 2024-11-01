@@ -235,5 +235,5 @@ def main():
     #     delete_result = api_test.delete_image(image_id)
     #     print("Delete result:", json.dumps(delete_result, indent=2))
 
-if __name__ == "__main__":
-    main()
+# if __name__ == "__main__":
+#     main()

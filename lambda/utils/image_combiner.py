@@ -4,9 +4,7 @@ from PIL import Image, ImageDraw, ImageFont
 from io import BytesIO
 import math
 from typing import List, Tuple
-import base64
-import base64
-import base64
+import boto3
 
 class ImageCombiner:
     def __init__(self, target_size: Tuple[int, int] = (300, 300), max_columns: int = 3):
@@ -46,9 +44,56 @@ class ImageCombiner:
 
         return combined_image
 
+    def combine_two_images_horizontally(self, image1: Image.Image, image2: Image.Image, target_height: int = 600) -> Image.Image:
+        """
+        Combines two images horizontally (side by side) while maintaining aspect ratio.
+        
+        Args:
+            image1: First image (left side)
+            image2: Second image (right side)
+            target_height: Target height for both images (default 600px)
+            
+        Returns:
+            Combined image with both images side by side
+        """
+        # Convert images to RGBA if they aren't already
+        if image1.mode != 'RGBA':
+            image1 = image1.convert('RGBA')
+        if image2.mode != 'RGBA':
+            image2 = image2.convert('RGBA')
+        
+        # Calculate new dimensions while maintaining aspect ratio
+        ratio1 = image1.width / image1.height
+        ratio2 = image2.width / image2.height
+        
+        new_height = target_height
+        new_width1 = int(target_height * ratio1)
+        new_width2 = int(target_height * ratio2)
+        
+        # Resize images
+        image1_resized = image1.resize((new_width1, new_height), Image.LANCZOS)
+        image2_resized = image2.resize((new_width2, new_height), Image.LANCZOS)
+        
+        # Create new image to hold both images
+        total_width = new_width1 + new_width2
+        combined_image = Image.new('RGBA', (total_width, new_height), (255, 255, 255, 0))
+        
+        # Paste images side by side
+        combined_image.paste(image1_resized, (0, 0), image1_resized)
+        combined_image.paste(image2_resized, (new_width1, 0), image2_resized)
+        
+        return combined_image
+
     def _download_image(self, url: str) -> Image.Image:
         response = requests.get(url)
         return Image.open(BytesIO(response.content))
+
+    def _download_image_from_s3(self, s3_url: str) -> Image.Image:
+        # Assuming s3_url is in the format 's3://bucket-name/path/to/image.jpg'
+        bucket_name, key = s3_url.replace("s3://", "").split("/", 1)
+        s3 = boto3.client('s3')
+        response = s3.get_object(Bucket=bucket_name, Key=key)
+        return Image.open(BytesIO(response['Body'].read()))
 
     def _resize_image(self, image: Image.Image) -> Image.Image:
         if image.mode != 'RGBA':
@@ -78,31 +123,3 @@ class ImageCombiner:
         draw.text((position[0] + 5, position[1] + 5), text, font=font, fill=(255, 255, 255, 255))
 
         return image
-    
-# generate a base64 string for a image
-def image_to_base64(image: Image.Image) -> str:
-    buffered = BytesIO()
-    image.save(buffered, format="PNG")
-    return base64.b64encode(buffered.getvalue()).decode('utf-8')
-# generate image_to_base64 test case
-def test_image_to_base64():
-    # read image from local file
-    image = Image.open("/Users/enginez/Downloads/搜图10.19/模特款式近似/期望搜索图一.jpg")
-    base64_string = image_to_base64(image)
-    print(base64_string)
-
-def main():
-    combiner = ImageCombiner(target_size=(300, 300), max_columns=3)
-
-    # Example with local directory
-    local_directory = "/Users/enginez/Downloads/搜图10.19/模特款式近似"  # Update this path to your local image directory
-    if os.path.exists(local_directory):
-        local_images = combiner.get_images_from_directory(local_directory)
-        combined_local_image = combiner.combine_images(local_images)
-        combined_local_image.save("combined_local_image.png", format="PNG")
-        print("Combined image from local directory saved as 'combined_local_image.png'")
-    else:
-        print(f"Local directory '{local_directory}' not found.")
-
-if __name__ == "__main__":
-    test_image_to_base64()
