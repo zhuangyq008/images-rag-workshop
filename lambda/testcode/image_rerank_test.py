@@ -28,7 +28,7 @@ class ImageRerankTest:
             image_path: Path to the query image file
         """
         # Test query
-        query_text = "连衣裙的设计非常简洁大方,露出肩部线条,袖子则是修长的喇叭袖造型"
+        query_text = "Former President of the United States"
         
         try:
             # Get initial search results
@@ -106,16 +106,16 @@ def main():
     test = ImageRerankTest()
     
     # Test image path
-    test_image_path = "/Users/enginez/Downloads/搜图10.19/模特款式近似/1、搜索原图.jpg"  # Update with actual test image path
+    test_image_path = "/Users/enginez/Downloads/us-flag.jpeg"  # Update with actual test image path
     
     # Run tests
     # print("Running rerank test with text and image...")
-    # text_and_image_result = test.test_rerank_with_text_and_image(test_image_path)
-    # print(f"Text and image test {'succeeded' if text_and_image_result else 'failed'}\n")
+    text_and_image_result = test.test_rerank_with_text_and_image(test_image_path)
+    print(f"Text and image test {'succeeded' if text_and_image_result else 'failed'}\n")
     
-    print("Running rerank test with text only...")
-    text_only_result = test.test_rerank_with_text_only()
-    print(f"Text only test {'succeeded' if text_only_result else 'failed'}")
+    # print("Running rerank test with text only...")
+    # text_only_result = test.test_rerank_with_text_only()
+    # print(f"Text only test {'succeeded' if text_only_result else 'failed'}")
 
 if __name__ == "__main__":
     main()

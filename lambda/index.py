@@ -148,7 +148,7 @@ async def upload_image(request: ImageUploadRequest) -> APIResponse:
                     'image_path': s3_key
             }                           
             logger.info(f"Indexing document in OpenSearch: {image_id}")
-            opensearch_client.index_document(document)
+            _ret = opensearch_client.index_document(document)
             logger.info(f"Successfully indexed document in OpenSearch: {image_id}")
         except Exception as e:
             logger.error(f"Failed to index document in OpenSearch: {str(e)}")
