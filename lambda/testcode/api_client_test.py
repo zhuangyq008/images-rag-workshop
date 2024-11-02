@@ -4,6 +4,8 @@ import base64
 from PIL import Image
 import io
 import os
+from typing import List
+import mimetypes
 
 class ImageProcessingAPITest:
     def __init__(self, base_url):
@@ -17,6 +19,7 @@ class ImageProcessingAPITest:
         self.headers = {
             'Content-Type': 'application/json'
         }
+        self.supported_formats = {'.jpg', '.jpeg', '.png', '.gif', '.bmp', '.webp'}
 
     def encode_image(self, image_path):
         """
@@ -146,17 +149,18 @@ class ImageProcessingAPITest:
         )
         
         return response.json()
+
     def search_by_text_and_image(self, query_text, image_path, k=10):
         """
-        使用文本和图片搜索相��图片
+        使用文本和图片搜索相似图片
 
         Args:
-            query_text: ���文本
+            query_text: 搜索文本
             image_path: 查询图片路径
             k: 返回结果数量
 
         Returns:
-            API��应
+            API响应
         """
         image_base64 = self.encode_image(image_path)
 
@@ -191,49 +195,117 @@ class ImageProcessingAPITest:
         
         return response.json()
 
+    def is_image_file(self, file_path: str) -> bool:
+        """
+        Check if a file is an image based on its extension and content.
+        
+        Args:
+            file_path: Path to the file
+            
+        Returns:
+            bool: True if file is a valid image, False otherwise
+        """
+        try:
+            extension = os.path.splitext(file_path)[1].lower()
+            if extension not in self.supported_formats:
+                return False
+                
+            # Try to open the file as an image
+            with Image.open(file_path) as img:
+                img.verify()
+            return True
+        except Exception:
+            return False
+
+    def find_all_images(self, directory: str) -> List[str]:
+        """
+        Recursively find all image files in a directory and its subdirectories.
+        
+        Args:
+            directory: Root directory to search
+            
+        Returns:
+            List of image file paths
+        """
+        image_files = []
+        directory = os.path.abspath(directory)
+        
+        for root, _, files in os.walk(directory):
+            for file in files:
+                file_path = os.path.join(root, file)
+                if self.is_image_file(file_path):
+                    image_files.append(file_path)
+        
+        print(f"Found {len(image_files)} images in {directory}")
+        return image_files
+
+    def upload_directory(self, directory: str) -> dict:
+        """
+        Upload all images from a directory and its subdirectories.
+        
+        Args:
+            directory: Directory containing images
+            
+        Returns:
+            dict: Upload results summary
+        """
+        results = {
+            'total_images': 0,
+            'successful_uploads': 0,
+            'failed_uploads': 0,
+            'failed_files': []
+        }
+        
+        # Find all images
+        image_files = self.find_all_images(directory)
+        results['total_images'] = len(image_files)
+        
+        # Upload each image
+        for image_path in image_files:
+            try:
+                upload_result = self.upload_image(
+                    image_path,
+                    description=f"Image: {os.path.basename(image_path)}"
+                )
+                
+                if isinstance(upload_result, dict) and upload_result.get('code') == 200:
+                    results['successful_uploads'] += 1
+                else:
+                    results['failed_uploads'] += 1
+                    results['failed_files'].append(image_path)
+                    print(f"Failed to upload {image_path}: {upload_result}")
+                    
+            except Exception as e:
+                results['failed_uploads'] += 1
+                results['failed_files'].append(image_path)
+                print(f"Error uploading {image_path}: {e}")
+        
+        return results
+
 def main():
     # API测试示例
     api_url = os.environ.get('API_URL', 'http://127.0.0.1:8000')
     api_test = ImageProcessingAPITest(api_url)
     
-    # 测试上传图片
-    # print("Testing image upload...")
-    # upload_result = api_test.upload_image(
-    #     "/Users/enginez/Downloads/blue backpack on a table.png",
-    #     description="Test image",
-    #     tags=["test", "demo"]
-    # )
-    # print("Upload result:", json.dumps(upload_result, indent=2))
+    # Test directory upload
+    directory = input("Enter the path to the image directory: ").strip()
     
-    # if "data" in upload_result and "image_id" in upload_result["data"]:
-    #     image_id = upload_result["data"]["image_id"]
+    if not os.path.isdir(directory):
+        print(f"Error: {directory} is not a valid directory")
+        return
         
-    #     # 测试更新元数据
-    #     print("\nTesting metadata update...")
-    #     update_result = api_test.update_image(
-    #         image_id,
-    #         description="Updated description",
-    #         tags=["updated", "test"]
-    #     )
-    #     print("Update result:", json.dumps(update_result, indent=2))
-        
-    #     # 测试图片搜索
-    # print("\nTesting image search...")
-    # search_result = api_test.search_by_image("/Users/enginez/Downloads/搜图10.19/模特款式近似/期望搜索图一.jpg", k=5)
-    # print("Search result:", json.dumps(search_result, indent=2))
-    #   测试文本与图片搜索
-    print("\nTesting text and image search...")
-    search_result = api_test.search_by_text_and_image("鼠标", "/Users/enginez/Downloads/搜图10.19/元素图相同，款式不同/1、搜索原图.jpg", k=5)    
-    print("Text search result:", json.dumps(search_result, indent=2))
-        # 测试文本搜索
-    # print("\nTesting text search...")
-    # text_search_result = api_test.search_by_text("blue backpack on a table", k=5)
-    # print("Text search result:", json.dumps(text_search_result, indent=2))
-        
-    #     # 测试删除图片
-    #     print("\nTesting image deletion...")
-    #     delete_result = api_test.delete_image(image_id)
-    #     print("Delete result:", json.dumps(delete_result, indent=2))
+    print(f"\nStarting image upload from directory: {directory}")
+    results = api_test.upload_directory(directory)
+    
+    print("\nUpload Summary:")
+    print(f"Total images found: {results['total_images']}")
+    print(f"Successfully uploaded: {results['successful_uploads']}")
+    print(f"Failed uploads: {results['failed_uploads']}")
+    
+    if results['failed_files']:
+        print("\nFailed uploads:")
+        for file in results['failed_files']:
+            print(f"- {file}")
 
-# if __name__ == "__main__":
-#     main()
+if __name__ == "__main__":
+    main()

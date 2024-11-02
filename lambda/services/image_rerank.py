@@ -6,6 +6,7 @@ import base64
 from PIL import Image
 from io import BytesIO
 from typing import List, Dict, Optional
+import uuid
 
 class ImageRerank:
     def __init__(self):
@@ -118,6 +119,22 @@ class ImageRerank:
         combined_bytes = BytesIO()
         combined_image.save(combined_bytes, format='PNG')
         combined_bytes = combined_bytes.getvalue()
+        # save the combined image to s3
+        try:
+            # generate a uuid for the key
+            _key = str(uuid.uuid4())
+            result_key = f'image_search_results/{_key}.png'
+            self.s3.put_object(
+                Bucket=Config.BUCKET_NAME,
+                # set key to uuid prefix
+                Key=result_key,
+                Body=combined_bytes
+            )
+            print(f"Combined image saved to S3 successfully. the key = {result_key}")
+            
+        except Exception as e:
+            print(f"Error saving combined image to S3: {e}")
+
         
         # Encode combined image
         combined_image_base64 = self._encode_image(combined_bytes)
@@ -171,12 +188,11 @@ Be as specific and accurate as possible in your response. If you are unable to i
         
         try:
             # Parse Claude's response
+            print(f"Claude's response: {response}")
             matches = json.loads(response)
-            
             # Rerank items based on Claude's response
             reranked_items = []
             matched_indices = [int(match['imageIndexNo']) for match in matches]
-            
             # Add matched items first
             for idx in matched_indices:
                 if 0 <= idx - 1 < len(items_list):  # Subtract 1 since display indices start at 1
@@ -191,4 +207,5 @@ Be as specific and accurate as possible in your response. If you are unable to i
             
         except json.JSONDecodeError:
             # If response parsing fails, return original list
+            print("Failed to parse Claude's response. Returning original list.")
             return items_list

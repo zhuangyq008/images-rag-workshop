@@ -11,6 +11,8 @@ if lambda_path not in sys.path:
 from services.image_rerank import ImageRerank
 from testcode.api_client_test import ImageProcessingAPITest
 from models.api_response import APIResponse
+import json
+import json
 
 class ImageRerankTest:
     def __init__(self):
@@ -38,7 +40,6 @@ class ImageRerankTest:
                 return False
                 
             search_results = search_response['data']['results']
-            
             # Rerank the results
             reranked_results = self.reranker.rerank(
                 items_list=search_results,
@@ -49,11 +50,11 @@ class ImageRerankTest:
             # Print results for comparison
             print("\nOriginal Search Results:")
             for idx, item in enumerate(search_results):
-                print(f"{idx + 1}. Score: {item.get('score', 'N/A')}, Description: {item.get('description', 'N/A')}")
+                print(f"{idx + 1}. Score: {item.get('score', 'N/A')}, image key: {item.get('image_path', 'N/A')}")
             
             print("\nReranked Results:")
             for idx, item in enumerate(reranked_results):
-                print(f"{idx + 1}. Score: {item.get('score', 'N/A')}, Description: {item.get('description', 'N/A')}")
+                print(f"{idx + 1}. Score: {item.get('score', 'N/A')}, image key: {item.get('image_path', 'N/A')}")
             
             return True
             
@@ -66,7 +67,7 @@ class ImageRerankTest:
         Test reranking with only text query
         """
         # Test query
-        query_text = "a person wearing a red shirt"
+        query_text = " a woman's torso wearing a tight-fitting black bodysuit or lingerie piece with thin straps."
         
         try:
             # Get initial search results
@@ -77,7 +78,7 @@ class ImageRerankTest:
                 print("Error: Unexpected response format")
                 return False
                 
-            search_results = search_response['data']
+            search_results = search_response['data']['results']
             
             # Rerank the results
             reranked_results = self.reranker.rerank(
@@ -88,11 +89,11 @@ class ImageRerankTest:
             # Print results for comparison
             print("\nOriginal Search Results (Text Only):")
             for idx, item in enumerate(search_results):
-                print(f"{idx + 1}. Score: {item.get('score', 'N/A')}, Description: {item.get('description', 'N/A')}")
+                print(f"{idx + 1}. Score: {item.get('score', 'N/A')}, image key: {item.get('image_path', 'N/A')}")
             
             print("\nReranked Results (Text Only):")
             for idx, item in enumerate(reranked_results):
-                print(f"{idx + 1}. Score: {item.get('score', 'N/A')}, Description: {item.get('description', 'N/A')}")
+                print(f"{idx + 1}. Score: {item.get('score', 'N/A')}, image key: {item.get('image_path', 'N/A')}")
             
             return True
             
@@ -108,13 +109,13 @@ def main():
     test_image_path = "/Users/enginez/Downloads/搜图10.19/模特款式近似/1、搜索原图.jpg"  # Update with actual test image path
     
     # Run tests
-    print("Running rerank test with text and image...")
-    text_and_image_result = test.test_rerank_with_text_and_image(test_image_path)
-    print(f"Text and image test {'succeeded' if text_and_image_result else 'failed'}\n")
+    # print("Running rerank test with text and image...")
+    # text_and_image_result = test.test_rerank_with_text_and_image(test_image_path)
+    # print(f"Text and image test {'succeeded' if text_and_image_result else 'failed'}\n")
     
     print("Running rerank test with text only...")
-    # text_only_result = test.test_rerank_with_text_only()
-    # print(f"Text only test {'succeeded' if text_only_result else 'failed'}")
+    text_only_result = test.test_rerank_with_text_only()
+    print(f"Text only test {'succeeded' if text_only_result else 'failed'}")
 
 if __name__ == "__main__":
     main()

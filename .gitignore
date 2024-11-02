@@ -8,3 +8,4 @@ lambda/lambda_layer
 # CDK asset staging directory
 .cdk.staging
 cdk.out
+.DS_Store
