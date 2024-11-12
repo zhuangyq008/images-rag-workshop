@@ -3,10 +3,10 @@ import { Construct } from 'constructs';
 import * as apigateway from 'aws-cdk-lib/aws-apigateway';
 import * as lambda from 'aws-cdk-lib/aws-lambda';
 import * as iam from 'aws-cdk-lib/aws-iam';
+import * as cognito from 'aws-cdk-lib/aws-cognito';
 import * as s3 from 'aws-cdk-lib/aws-s3';
-import * as cloudfront from 'aws-cdk-lib/aws-cloudfront';
-import * as origins from 'aws-cdk-lib/aws-cloudfront-origins';
-import * as opensearchserverless from 'aws-cdk-lib/aws-opensearchserverless';
+import * as opensearch from 'aws-cdk-lib/aws-opensearchservice';
+import * as ec2 from 'aws-cdk-lib/aws-ec2';
 
 export class CdkImageProcessingStack extends cdk.Stack {
   constructor(scope: Construct, id: string, props?: cdk.StackProps) {
@@ -20,30 +20,118 @@ export class CdkImageProcessingStack extends cdk.Stack {
       blockPublicAccess: s3.BlockPublicAccess.BLOCK_ALL,
     });
 
-    // Create OpenSearch Serverless encryption policy
-    const encryptionPolicy = new opensearchserverless.CfnSecurityPolicy(this, 'CollectionEncryptionPolicy', {
-      name: 'encryption-policy',
-      type: 'encryption',
-      description: 'Encryption policy for image collection',
-      policy: JSON.stringify({
-        Rules: [
-          {
-            ResourceType: 'collection',
-            Resource: ['collection/image-collection'],
-          },
-        ],
-        AWSOwnedKey: true,
-      }),
+    // 创建 Cognito 用户池
+    const userPool = new cognito.UserPool(this, 'CognitoUserPool', {
+      userPoolName: 'MyCognitoUserPool',
+      passwordPolicy: {
+        minLength: 8,
+        requireLowercase: false,
+        requireUppercase: false,
+        requireDigits: false,
+        requireSymbols: false
+      }
     });
 
-    // Create OpenSearch Serverless collection
-    const collection = new opensearchserverless.CfnCollection(this, 'ImageCollection', {
-      name: 'image-collection',
-      type: 'VECTORSEARCH',
+    // 创建用户池域
+    const userPoolDomain = userPool.addDomain('CognitoUserPoolDomain', {
+      cognitoDomain: {
+        domainPrefix: 'my-user-pool-domain'
+      }
     });
 
-    // Ensure the collection is created after the encryption policy
-    collection.addDependency(encryptionPolicy);
+    // 创建用户池客户端
+    const userPoolClient = new cognito.UserPoolClient(this, 'CognitoUserPoolClient', {
+      userPool: userPool,
+      generateSecret: false,
+      authFlows: {
+        adminUserPassword: true
+      }
+    });
+
+    // 创建 Cognito 身份池
+    const identityPool = new cognito.CfnIdentityPool(this, 'CognitoIdentityPool', {
+      identityPoolName: 'MyIdentityPool',
+      allowUnauthenticatedIdentities: false,
+      cognitoIdentityProviders: [
+        {
+          providerName: `cognito-idp.${this.region}.amazonaws.com/${userPool.userPoolId}`,
+          clientId: userPoolClient.userPoolClientId
+        }
+      ]
+    });
+
+    // 创建 IAM 角色，授权 Cognito 用户池访问 OpenSearch
+    const authenticatedRole = new iam.Role(this, 'MyAuthenticatedRole', {
+      assumedBy: new iam.FederatedPrincipal(
+        'cognito-identity.amazonaws.com',
+        {
+          'StringEquals': { 'cognito-identity.amazonaws.com:aud': identityPool.ref }
+        },
+        'sts:AssumeRoleWithWebIdentity'
+      ),
+      inlinePolicies: {
+        CognitoAccessPolicy: new iam.PolicyDocument({
+          statements: [
+            new iam.PolicyStatement({
+              actions: ['*'],
+              resources: ['*'],
+              effect: iam.Effect.ALLOW
+            })
+          ]
+        })
+      }
+    });
+
+    // 附加角色到身份池
+    new cognito.CfnIdentityPoolRoleAttachment(this, 'MyIdentityPoolRoleAttachment', {
+      identityPoolId: identityPool.ref,
+      roles: {
+        authenticated: authenticatedRole.roleArn
+      }
+    });
+
+    // 创建 OpenSearch IAM 角色
+    const openSearchRole = new iam.Role(this, 'MyOpenSearchRole', {
+      assumedBy: new iam.ServicePrincipal('es.amazonaws.com'),
+      managedPolicies: [
+        iam.ManagedPolicy.fromAwsManagedPolicyName('AmazonESFullAccess'),
+        iam.ManagedPolicy.fromAwsManagedPolicyName('AmazonCognitoPowerUser')
+      ]
+    });
+
+    // 创建 OpenSearch 域
+    const openSearchDomain =  new opensearch.Domain(this, 'OpenSearchDomain', {
+      version: opensearch.EngineVersion.OPENSEARCH_2_15,
+      capacity: {
+        multiAzWithStandbyEnabled: false,
+        dataNodes: 1,
+        dataNodeInstanceType: 'r7g.large.search'
+      },
+      nodeToNodeEncryption: true,
+      zoneAwareness: {
+        enabled: false  // 禁用区域感知
+      },
+      encryptionAtRest: {
+        enabled: true
+      },
+      enforceHttps: true,
+      fineGrainedAccessControl: {
+        masterUserArn: authenticatedRole.roleArn
+      },
+      cognitoDashboardsAuth: {
+        identityPoolId: identityPool.ref,
+        role: openSearchRole,
+        userPoolId: userPool.userPoolId
+      },
+      ebs: {
+        enabled: true,
+        volumeSize: 20,
+        volumeType: ec2.EbsDeviceVolumeType.GENERAL_PURPOSE_SSD_GP3, 
+      }
+    });
+  
+    // 获取 OpenSearch 的 endpoint
+    const openSearchEndpoint = openSearchDomain.domainEndpoint;
 
     // Create Lambda layer with dependencies
     const dependenciesLayer = new lambda.LayerVersion(this, 'DependenciesLayer', {
@@ -61,8 +149,7 @@ export class CdkImageProcessingStack extends cdk.Stack {
       memorySize: 512,
       environment: {
         BUCKET_NAME: imageBucket.bucketName,
-        COLLECTION_NAME: collection.name,
-        OPENSEARCH_ENDPOINT: collection.attrCollectionEndpoint,
+        OPENSEARCH_ENDPOINT: openSearchEndpoint,
       },
       timeout: cdk.Duration.seconds(30),
     });
@@ -70,64 +157,7 @@ export class CdkImageProcessingStack extends cdk.Stack {
     // Get caller identity ARN from context
     const callerArn = this.node.tryGetContext('callerArn') || cdk.Fn.importValue('CallerArn');
 
-    // Create OpenSearch Serverless data access policy
-    const dataAccessPolicy = new opensearchserverless.CfnAccessPolicy(this, 'CollectionDataAccessPolicy', {
-      name: 'image-collection-data-policy',
-      type: 'data',
-      description: 'Data access policy for image collection',
-      policy: JSON.stringify([
-        {
-          Description: "Allow Lambda function and caller to access the collection",
-          Rules: [
-            {
-              ResourceType: 'index',
-              Resource: ['index/image-collection/*'],
-              Permission: [
-                'aoss:CreateIndex',
-                'aoss:DeleteIndex',
-                'aoss:UpdateIndex',
-                'aoss:DescribeIndex',
-                'aoss:ReadDocument',
-                'aoss:WriteDocument',
-              ],
-            },
-            {
-              ResourceType: 'collection',
-              Resource: ['collection/image-collection'],
-              Permission: [
-                'aoss:CreateCollectionItems',
-                'aoss:DeleteCollectionItems',
-                'aoss:UpdateCollectionItems',
-                'aoss:DescribeCollectionItems',
-              ],
-            },
-          ],
-          Principal: [
-            imageProcessingFunction.role!.roleArn,
-            callerArn  // Add caller's ARN
-          ],
-        },
-      ]),
-    });
-
-    // Create OpenSearch Serverless network policy
-    const networkPolicy = new opensearchserverless.CfnSecurityPolicy(this, 'CollectionNetworkPolicy', {
-      name: 'image-collection-network-policy',
-      type: 'network',
-      description: 'Network policy for image collection',
-      policy: JSON.stringify([
-        {
-          Rules: [
-            {
-              ResourceType: 'collection',
-              Resource: ['collection/image-collection'],
-            },
-          ],
-          AllowFromPublic: true,
-        },
-      ]),
-    });
-
+    
     // Grant Lambda permissions
     imageBucket.grantReadWrite(imageProcessingFunction);
     imageProcessingFunction.addToRolePolicy(new iam.PolicyStatement({
@@ -136,9 +166,12 @@ export class CdkImageProcessingStack extends cdk.Stack {
     }));
     imageProcessingFunction.addToRolePolicy(new iam.PolicyStatement({
       actions: [
-        'aoss:*'
+        'es:ESHttpGet',
+        'es:ESHttpPut',
+        'es:ESHttpPost',
+        'es:ESHttpDelete'
       ],
-      resources: [collection.attrArn],
+      resources: [`${openSearchDomain.domainArn}/*`],
     }));
 
     // Create API Gateway

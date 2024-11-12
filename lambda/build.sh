@@ -14,7 +14,7 @@ source venv/bin/activate
 pip install -r requirements.txt
 
 # Copy installed packages to lambda layer
-cp -r venv/lib/python3.10/site-packages/* lambda_layer/python/
+cp -r venv/lib/python*/site-packages/* lambda_layer/python/
 
 # Deactivate and remove virtual environment
 deactivate

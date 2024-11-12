@@ -30,6 +30,20 @@ uvicorn index:app --reload
 
 ## 部署说明
 
+前提：安装python 版本>3.9 npm 及cdk
+
+Amazon linux 2023 参考
+
+```
+yum install npm
+yum install python
+npm install -g aws-cdk
+
+```
+执行部署的必要权限：
+
+修改 images-rag-workshop/cdk.context.json `callerArn` 为执行权限
+
 This is a blank project for CDK development with TypeScript.
 
 The `cdk.json` file tells the CDK Toolkit how to execute your app.
@@ -41,6 +55,8 @@ sh build.sh
 cd ..
 
 npm install
+
+cdk bootstrap
 
 cdk deploy
 
