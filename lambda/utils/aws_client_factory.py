@@ -11,4 +11,4 @@ class AWSClientFactory:
 
     @staticmethod
     def create_opensearch_client():
-        return boto3.client('opensearchserverless')
+        return boto3.client('opensearch')

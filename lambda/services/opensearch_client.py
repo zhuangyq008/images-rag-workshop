@@ -8,8 +8,7 @@ class OpenSearchClient:
         session = Config.get_aws_session()
         credentials = session.get_credentials()
         region = session.region_name
-        service = 'aoss'
-        
+        service = 'es'
         self.awsauth = AWS4Auth(
             credentials.access_key,
             credentials.secret_key,
@@ -28,7 +27,7 @@ class OpenSearchClient:
         )
 
     def ensure_index_exists(self):
-        index_name = Config.COLLECTION_INDEX_NAME
+        index_name = config.COLLECTION_INDEX_NAME
         if not self.client.indices.exists(index=index_name):
             settings = {
                 "settings": {
@@ -60,7 +59,7 @@ class OpenSearchClient:
                 raise HTTPException(status_code=500, detail=f"Error creating index: {str(e)}")
 
     def index_document(self, document):
-        index_name = Config.COLLECTION_INDEX_NAME
+        index_name = config.COLLECTION_INDEX_NAME
         try:
             print(f"Indexing document: {document['id']}")
             response = self.client.index(
@@ -72,7 +71,7 @@ class OpenSearchClient:
             raise HTTPException(status_code=500, detail=f"Error indexing document: {str(e)}")
 
     def update_document(self, image_id, description, tags):
-        index_name = Config.COLLECTION_INDEX_NAME
+        index_name = config.COLLECTION_INDEX_NAME
         try:
             response = self.client.update(
                 index=index_name,
@@ -89,7 +88,7 @@ class OpenSearchClient:
             raise HTTPException(status_code=500, detail=f"Error updating document: {str(e)}")
 
     def delete_document(self, image_id):
-        index_name = Config.COLLECTION_INDEX_NAME
+        index_name = config.COLLECTION_INDEX_NAME
         try:
             response = self.client.delete(
                 index=index_name,
@@ -100,7 +99,7 @@ class OpenSearchClient:
             raise HTTPException(status_code=500, detail=f"Error deleting document: {str(e)}")
     # default type is image embedding
     def query_by_image(self, embedding, k):
-        index_name = Config.COLLECTION_INDEX_NAME
+        index_name = config.COLLECTION_INDEX_NAME
         query = {
             'size': k,
             'query': {
@@ -131,7 +130,7 @@ class OpenSearchClient:
             raise HTTPException(status_code=500, detail=f"Error querying OpenSearch: {str(e)}")
 
     def query_by_text(self, embedding, k):
-        index_name = Config.COLLECTION_INDEX_NAME
+        index_name = config.COLLECTION_INDEX_NAME
         query = {
             'size': k,
             'query': {
@@ -162,7 +161,7 @@ class OpenSearchClient:
             raise HTTPException(status_code=500, detail=f"Error querying OpenSearch: {str(e)}")
 
     def query_by_text_and_image(self, text_embedding, image_embedding,k):
-        index_name = Config.COLLECTION_INDEX_NAME
+        index_name = config.COLLECTION_INDEX_NAME
         query = {
             'size': k,
             'query': {
