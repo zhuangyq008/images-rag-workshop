@@ -3,11 +3,12 @@ import boto3
 
 class Config:
     BUCKET_NAME = os.environ['BUCKET_NAME']
+    DDSTRIBUTION_DOMAIN = os.environ['DDSTRIBUTION_DOMAIN']
     VECTOR_DIMENSION = 1024
     VECTOR_TEXT_DIMENSION = 1024
     OPENSEARCH_ENDPOINT = os.environ['OPENSEARCH_ENDPOINT']
     COLLECTION_INDEX_NAME = 'image-index-multi-1024'
-    MULTIMODEL_LLM_ID = 'anthropic.claude-3-sonnet-20240229-v1:0'
+    MULTIMODEL_LLM_ID = 'anthropic.claude-3-5-sonnet-20240620-v1:0'
     IMG_DESCN_PROMPT = """
         You will be analyzing an image and extracting its key features, including tags, and providing a brief summary of the image content.
 

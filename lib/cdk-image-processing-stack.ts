@@ -7,6 +7,8 @@ import * as cognito from 'aws-cdk-lib/aws-cognito';
 import * as s3 from 'aws-cdk-lib/aws-s3';
 import * as opensearch from 'aws-cdk-lib/aws-opensearchservice';
 import * as ec2 from 'aws-cdk-lib/aws-ec2';
+import * as cloudfront from 'aws-cdk-lib/aws-cloudfront';
+import * as origins from 'aws-cdk-lib/aws-cloudfront-origins';
 
 export class CdkImageProcessingStack extends cdk.Stack {
   constructor(scope: Construct, id: string, props?: cdk.StackProps) {
@@ -19,6 +21,36 @@ export class CdkImageProcessingStack extends cdk.Stack {
       encryption: s3.BucketEncryption.S3_MANAGED,
       blockPublicAccess: s3.BlockPublicAccess.BLOCK_ALL,
     });
+
+    // 创建 Origin Access Control
+    const oac = new cloudfront.CfnOriginAccessControl(this, 'OAC', {
+      originAccessControlConfig: {
+        name: 'S3OAC',
+        originAccessControlOriginType: 's3',
+        signingBehavior: 'always', 
+        signingProtocol: 'sigv4',
+      }
+    });
+
+    // 创建 CloudFront 分配
+    const cloudFrontDistribution = new cloudfront.Distribution(this, 'ImageDistribution', {
+      defaultBehavior: {
+        origin: new origins.S3Origin(imageBucket, {
+          originAccessControl: oac
+        }),
+        viewerProtocolPolicy: cloudfront.ViewerProtocolPolicy.REDIRECT_TO_HTTPS,
+      },
+      defaultRootObject: 'index.html',
+      enableLogging: true,
+    });
+
+    // 更新 S3 存储桶策略，确保只有 CloudFront 能够访问
+    imageBucket.addToResourcePolicy(new iam.PolicyStatement({
+      effect: iam.Effect.ALLOW,
+      actions: ['s3:GetObject'],
+      resources: [`${imageBucket.bucketArn}/*`],
+      principals: [new iam.CanonicalUserPrincipal(cloudFrontDistribution.cloudFrontOriginAccessIdentityS3CanonicalUserId)]
+    }));
 
     // 创建 Cognito 用户池
     const userPool = new cognito.UserPool(this, 'CognitoUserPool', {
@@ -185,6 +217,31 @@ export class CdkImageProcessingStack extends cdk.Stack {
 
     // Create API resources and methods with AuthorizationType.NONE
     const imagesResource = api.root.addResource('images');
+
+    // 添加 OPTIONS 方法以处理 CORS 预检请求
+    imagesResource.addMethod('OPTIONS', new apigateway.MockIntegration({
+      integrationResponses: [{
+        statusCode: '200',
+        responseParameters: {
+          'method.response.header.Access-Control-Allow-Headers': "'Content-Type,X-Amz-Date,Authorization,X-Api-Key'",
+          'method.response.header.Access-Control-Allow-Origin': "'*'",
+          'method.response.header.Access-Control-Allow-Methods': "'OPTIONS,POST,PUT,DELETE'",
+        },
+      }],
+      passthroughBehavior: apigateway.PassthroughBehavior.NEVER,
+      requestTemplates: {
+        'application/json': '{"statusCode": 200}'
+      },
+    }), {
+      methodResponses: [{
+        statusCode: '200',
+        responseParameters: {
+          'method.response.header.Access-Control-Allow-Headers': true,
+          'method.response.header.Access-Control-Allow-Origin': true,
+          'method.response.header.Access-Control-Allow-Methods': true,
+        },
+      }],
+    });
     
     imagesResource.addMethod('POST', new apigateway.LambdaIntegration(imageProcessingFunction), {
       authorizationType: apigateway.AuthorizationType.NONE
@@ -197,6 +254,30 @@ export class CdkImageProcessingStack extends cdk.Stack {
     }); // Delete
     
     const searchResource = imagesResource.addResource('search');
+    // 为 searchResource 添加 OPTIONS 方法
+    searchResource.addMethod('OPTIONS', new apigateway.MockIntegration({
+      integrationResponses: [{
+        statusCode: '200',
+        responseParameters: {
+          'method.response.header.Access-Control-Allow-Headers': "'Content-Type,X-Amz-Date,Authorization,X-Api-Key'",
+          'method.response.header.Access-Control-Allow-Origin': "'*'",
+          'method.response.header.Access-Control-Allow-Methods': "'OPTIONS,POST'",
+        },
+      }],
+      passthroughBehavior: apigateway.PassthroughBehavior.NEVER,
+      requestTemplates: {
+        'application/json': '{"statusCode": 200}'
+      },
+    }), {
+      methodResponses: [{
+        statusCode: '200',
+        responseParameters: {
+          'method.response.header.Access-Control-Allow-Headers': true,
+          'method.response.header.Access-Control-Allow-Origin': true,
+          'method.response.header.Access-Control-Allow-Methods': true,
+        },
+      }],
+    });
     searchResource.addMethod('POST', new apigateway.LambdaIntegration(imageProcessingFunction), {
       authorizationType: apigateway.AuthorizationType.NONE
     }); // Search

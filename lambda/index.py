@@ -23,6 +23,7 @@ from services.opensearch_client import OpenSearchClient
 from services.embedding_generator import EmbeddingGenerator
 from services.image_retrieve import ImageRetrieve
 from services.img_descn_generator import enrich_image_desc
+from services.image_rerank import ImageRerank
 
 # Configure logging
 logger = logging.getLogger()
@@ -232,7 +233,14 @@ async def search_images(request: ImageSearchRequest) -> APIResponse:
              results = image_retrieve.search_by_text_and_image(request.query_text, request.query_image, request.k)
 
         logger.info(f"Search completed successfully, found {len(results)} results")
-
+        # reranking
+        reranker = ImageRerank()
+        reranked_results = reranker.rerank(
+                items_list=results,
+                query_text=request.query_text,
+                query_image_base64=request.query_image
+            )
+        results = [{**result, "image_path": f"{Config.DDSTRIBUTION_DOMAIN}/{result['image_path']}"} for result in reranked_results]
         return APIResponse.success(
             message="Search completed successfully",
             data={"results": results}
