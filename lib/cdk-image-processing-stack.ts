@@ -175,13 +175,13 @@ export class CdkImageProcessingStack extends cdk.Stack {
     // Create Lambda layer with dependencies
     const dependenciesLayer = new lambda.LayerVersion(this, 'DependenciesLayer', {
       code: lambda.Code.fromAsset('lambda/lambda_layer'),
-      compatibleRuntimes: [lambda.Runtime.PYTHON_3_10],
+      compatibleRuntimes: [lambda.Runtime.PYTHON_3_8],
       description: 'Dependencies for image processing lambda',
     });
 
     // Create Lambda function
     const imageProcessingFunction = new lambda.Function(this, 'ImageProcessingFunction', {
-      runtime: lambda.Runtime.PYTHON_3_10,
+      runtime: lambda.Runtime.PYTHON_3_8,
       handler: 'index.handler',
       code: lambda.Code.fromAsset('lambda'),
       layers: [dependenciesLayer],
