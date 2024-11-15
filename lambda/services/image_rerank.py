@@ -7,12 +7,15 @@ from PIL import Image
 from io import BytesIO
 from typing import List, Dict, Optional
 import uuid
+from utils.config import Config
 
 class ImageRerank:
     def __init__(self):
+        session = Config.get_aws_session()
+        region = session.region_name
         self.bedrock = boto3.client(
             service_name='bedrock-runtime',
-            region_name='us-east-1'
+            region_name=region
         )
         self.s3 = boto3.client('s3')
         self.image_combiner = ImageCombiner()
@@ -64,7 +67,7 @@ class ImageRerank:
         }
 
         response = self.bedrock.invoke_model(
-            modelId="anthropic.claude-3-sonnet-20240229-v1:0",
+            modelId=Config.MULTIMODEL_LLM_ID,
             body=json.dumps(body)
         )
         

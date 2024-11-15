@@ -36,7 +36,7 @@ export class CdkImageProcessingStack extends cdk.Stack {
     const cloudFrontDistribution = new cloudfront.Distribution(this, 'ImageDistribution', {
       defaultBehavior: {
         origin: new origins.S3Origin(imageBucket, {
-          originAccessControl: oac
+          originAccessControlId: oac.attrId
         }),
         viewerProtocolPolicy: cloudfront.ViewerProtocolPolicy.REDIRECT_TO_HTTPS,
       },
@@ -49,12 +49,19 @@ export class CdkImageProcessingStack extends cdk.Stack {
       effect: iam.Effect.ALLOW,
       actions: ['s3:GetObject'],
       resources: [`${imageBucket.bucketArn}/*`],
-      principals: [new iam.CanonicalUserPrincipal(cloudFrontDistribution.cloudFrontOriginAccessIdentityS3CanonicalUserId)]
+      principals: [
+        new iam.ServicePrincipal('cloudfront.amazonaws.com') // 允许 CloudFront 访问
+      ],
+      conditions: {
+        "StringEquals": {
+          "AWS:SourceArn": `arn:aws:cloudfront::${this.account}:distribution/${cloudFrontDistribution.distributionId}`
+        }
+      }
     }));
 
     // 创建 Cognito 用户池
     const userPool = new cognito.UserPool(this, 'CognitoUserPool', {
-      userPoolName: 'MyCognitoUserPool',
+      userPoolName: `MyCognitoUserPool-${this.account}`,
       passwordPolicy: {
         minLength: 8,
         requireLowercase: false,
@@ -67,7 +74,7 @@ export class CdkImageProcessingStack extends cdk.Stack {
     // 创建用户池域
     const userPoolDomain = userPool.addDomain('CognitoUserPoolDomain', {
       cognitoDomain: {
-        domainPrefix: 'my-user-pool-domain'
+        domainPrefix: `my-user-pool-domain-${this.account}`
       }
     });
 
@@ -82,7 +89,7 @@ export class CdkImageProcessingStack extends cdk.Stack {
 
     // 创建 Cognito 身份池
     const identityPool = new cognito.CfnIdentityPool(this, 'CognitoIdentityPool', {
-      identityPoolName: 'MyIdentityPool',
+      identityPoolName: `MyIdentityPool-${this.account}`,
       allowUnauthenticatedIdentities: false,
       cognitoIdentityProviders: [
         {
@@ -182,6 +189,7 @@ export class CdkImageProcessingStack extends cdk.Stack {
       environment: {
         BUCKET_NAME: imageBucket.bucketName,
         OPENSEARCH_ENDPOINT: openSearchEndpoint,
+        DDSTRIBUTION_DOMAIN: cloudFrontDistribution.domainName
       },
       timeout: cdk.Duration.seconds(30),
     });
@@ -212,37 +220,38 @@ export class CdkImageProcessingStack extends cdk.Stack {
       defaultCorsPreflightOptions: {
         allowOrigins: apigateway.Cors.ALL_ORIGINS,
         allowMethods: apigateway.Cors.ALL_METHODS,
-      },
+      }
     });
 
     // Create API resources and methods with AuthorizationType.NONE
     const imagesResource = api.root.addResource('images');
-
-    // 添加 OPTIONS 方法以处理 CORS 预检请求
-    imagesResource.addMethod('OPTIONS', new apigateway.MockIntegration({
-      integrationResponses: [{
-        statusCode: '200',
-        responseParameters: {
-          'method.response.header.Access-Control-Allow-Headers': "'Content-Type,X-Amz-Date,Authorization,X-Api-Key'",
-          'method.response.header.Access-Control-Allow-Origin': "'*'",
-          'method.response.header.Access-Control-Allow-Methods': "'OPTIONS,POST,PUT,DELETE'",
-        },
-      }],
-      passthroughBehavior: apigateway.PassthroughBehavior.NEVER,
-      requestTemplates: {
-        'application/json': '{"statusCode": 200}'
-      },
-    }), {
-      methodResponses: [{
-        statusCode: '200',
-        responseParameters: {
-          'method.response.header.Access-Control-Allow-Headers': true,
-          'method.response.header.Access-Control-Allow-Origin': true,
-          'method.response.header.Access-Control-Allow-Methods': true,
-        },
-      }],
-    });
     
+    if (!imagesResource.node.tryFindChild('OPTIONS')) {
+      imagesResource.addMethod('OPTIONS', new apigateway.MockIntegration({
+        integrationResponses: [{
+          statusCode: '200',
+          responseParameters: {
+            'method.response.header.Access-Control-Allow-Origin': "'*'",
+            'method.response.header.Access-Control-Allow-Headers': "'Content-Type,X-Amz-Date,Authorization,X-Api-Key'",
+            'method.response.header.Access-Control-Allow-Methods': "'OPTIONS,POST,PUT,DELETE'",
+          },
+        }],
+        passthroughBehavior: apigateway.PassthroughBehavior.NEVER,
+        requestTemplates: {
+          "application/json": "{\"statusCode\": 200}"
+        },
+      }), {
+        methodResponses: [{
+          statusCode: '200',
+          responseParameters: {
+            'method.response.header.Access-Control-Allow-Origin': true,
+            'method.response.header.Access-Control-Allow-Headers': true,
+            'method.response.header.Access-Control-Allow-Methods': true,
+          },
+        }],
+      });
+    }
+        
     imagesResource.addMethod('POST', new apigateway.LambdaIntegration(imageProcessingFunction), {
       authorizationType: apigateway.AuthorizationType.NONE
     }); // Upload
@@ -254,33 +263,37 @@ export class CdkImageProcessingStack extends cdk.Stack {
     }); // Delete
     
     const searchResource = imagesResource.addResource('search');
-    // 为 searchResource 添加 OPTIONS 方法
-    searchResource.addMethod('OPTIONS', new apigateway.MockIntegration({
-      integrationResponses: [{
-        statusCode: '200',
-        responseParameters: {
-          'method.response.header.Access-Control-Allow-Headers': "'Content-Type,X-Amz-Date,Authorization,X-Api-Key'",
-          'method.response.header.Access-Control-Allow-Origin': "'*'",
-          'method.response.header.Access-Control-Allow-Methods': "'OPTIONS,POST'",
+    
+    if (!searchResource.node.tryFindChild('OPTIONS')) {
+      imagesResource.addMethod('OPTIONS', new apigateway.MockIntegration({
+        integrationResponses: [{
+          statusCode: '200',
+          responseParameters: {
+            'method.response.header.Access-Control-Allow-Origin': "'*'",
+            'method.response.header.Access-Control-Allow-Headers': "'Content-Type,X-Amz-Date,Authorization,X-Api-Key'",
+            'method.response.header.Access-Control-Allow-Methods': "'OPTIONS,POST,PUT,DELETE'",
+          },
+        }],
+        passthroughBehavior: apigateway.PassthroughBehavior.NEVER,
+        requestTemplates: {
+          "application/json": "{\"statusCode\": 200}"
         },
-      }],
-      passthroughBehavior: apigateway.PassthroughBehavior.NEVER,
-      requestTemplates: {
-        'application/json': '{"statusCode": 200}'
-      },
-    }), {
-      methodResponses: [{
-        statusCode: '200',
-        responseParameters: {
-          'method.response.header.Access-Control-Allow-Headers': true,
-          'method.response.header.Access-Control-Allow-Origin': true,
-          'method.response.header.Access-Control-Allow-Methods': true,
-        },
-      }],
-    });
+      }), {
+        methodResponses: [{
+          statusCode: '200',
+          responseParameters: {
+            'method.response.header.Access-Control-Allow-Origin': true,
+            'method.response.header.Access-Control-Allow-Headers': true,
+            'method.response.header.Access-Control-Allow-Methods': true,
+          },
+        }],
+      });
+    }
+
     searchResource.addMethod('POST', new apigateway.LambdaIntegration(imageProcessingFunction), {
       authorizationType: apigateway.AuthorizationType.NONE
     }); // Search
+    
 
     // Output the API Gateway URL
     new cdk.CfnOutput(this, 'ApiGatewayUrl', {

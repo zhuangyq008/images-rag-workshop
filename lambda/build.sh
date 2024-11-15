@@ -7,27 +7,30 @@ rm -rf lambda_layer
 mkdir -p lambda_layer/python
 
 # Create a temporary virtual environment
-python -m venv venv
-source venv/bin/activate
+# python -m venv venv
+# source venv/bin/activate
 
 # Install dependencies into the virtual environment
-pip install -r requirements.txt
+# pip install -r requirements.txt
 
 # Copy installed packages to lambda layer
-cp -r venv/lib/python*/site-packages/* lambda_layer/python/
+# cp -r venv/lib/python*/site-packages/* lambda_layer/python/
+
+docker build -t lambda-layer-builder .
+docker run --rm -v $(pwd)/:/opt/ lambda-layer-builder bash -c "cp -r /app/lambda_layer /opt/"
 
 # Deactivate and remove virtual environment
-deactivate
-rm -rf venv
+# deactivate
+# rm -rf venv
 
 # Clean up unnecessary files to reduce package size
-cd lambda_layer/python
-find . -type d -name "__pycache__" -exec rm -rf {} + 2>/dev/null
-find . -type d -name "*.dist-info" -exec rm -rf {} + 2>/dev/null
-find . -type f -name "*.pyc" -delete
-find . -type f -name "*.pyo" -delete
+# cd lambda_layer/python
+# find . -type d -name "__pycache__" -exec rm -rf {} + 2>/dev/null
+# find . -type d -name "*.dist-info" -exec rm -rf {} + 2>/dev/null
+# find . -type f -name "*.pyc" -delete
+# find . -type f -name "*.pyo" -delete
 
 # Create __init__.py files in all directories to ensure proper module imports
-find . -type d -exec touch {}/__init__.py \; 2>/dev/null
+# find . -type d -exec touch {}/__init__.py \; 2>/dev/null
 
-cd ../..
+# cd ../..

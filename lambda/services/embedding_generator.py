@@ -12,7 +12,7 @@ class EmbeddingGenerator:
             body = json.dumps({
                 "inputText": data
             })
-            model_id = "amazon.titan-embed-text-v2:0"
+            model_id = Config.EMVEDDINGMODEL_ID
         elif mode == 'image':
             body = json.dumps({
                 "inputImage": data,
