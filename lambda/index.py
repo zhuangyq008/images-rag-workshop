@@ -240,7 +240,8 @@ async def search_images(request: ImageSearchRequest) -> APIResponse:
                 query_text=request.query_text,
                 query_image_base64=request.query_image
             )
-        results = [{**result, "image_path": f"{Config.DDSTRIBUTION_DOMAIN}/{result['image_path']}"} for result in reranked_results]
+        bucket_prefix = f"s3://{Config.BUCKET_NAME}"
+        results = [{**result, "image_path": f"{Config.DDSTRIBUTION_DOMAIN}/{result['image_path'].replace(bucket_prefix, '')}"} for result in reranked_results]
         return APIResponse.success(
             message="Search completed successfully",
             data={"results": results}
