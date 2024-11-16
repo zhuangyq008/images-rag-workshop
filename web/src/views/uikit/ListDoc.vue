@@ -19,6 +19,7 @@ const visible_delete = ref(false);
 const visible_update = ref(false);
 const select_item = ref(null);
 const update_text = ref('');
+const loading = ref(false);
 onMounted(() => {
 
 });
@@ -102,6 +103,7 @@ function onUpload(image) {
 }
 
 function search() {
+    loading.value = true;
     const body = {}
     if (search_image.value != '') {
         body.query_image = search_image.value 
@@ -115,6 +117,7 @@ function search() {
     }})
             .then(response => {
                 console.log(response.data.data)
+                loading.value = false;
                 images_list.value = response.data.data.results
             
         })
@@ -211,7 +214,7 @@ function update_item() {
             
             <div class="card flex flex-col md:flex-row gap-8" style="margin-bottom: 10px;margin-top: -30px;">
                 <Toast />
-                <FileUpload   chooseLabel="Select Images" name="search" @uploader="onUpload" :multiple="false" accept="image/*" :maxFileSize="1000000" customUpload />
+                <FileUpload  chooseLabel="Select Images" name="search" @uploader="onUpload" :multiple="false" accept="image/*" :maxFileSize="1000000" customUpload />
         
             </div>
         </div>
