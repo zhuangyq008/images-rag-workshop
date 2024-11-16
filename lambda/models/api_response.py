@@ -21,9 +21,6 @@ class APIResponse(BaseModel):
 
         # 构建 JSONResponse 并添加 CORS 头部
         response = JSONResponse(content=api_response.dict())
-        response.headers['Access-Control-Allow-Headers'] = '*'
-        response.headers['Access-Control-Allow-Origin'] = '*'
-        response.headers['Access-Control-Allow-Methods'] = '*'
         
         return response
 
@@ -39,9 +36,6 @@ class APIResponse(BaseModel):
 
         # 构建 JSONResponse 并添加 CORS 头部
         response = JSONResponse(content=api_response.dict())
-        response.headers['Access-Control-Allow-Headers'] = '*'
-        response.headers['Access-Control-Allow-Origin'] = '*'
-        response.headers['Access-Control-Allow-Methods'] = '*'
 
         return response
 

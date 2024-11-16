@@ -185,6 +185,7 @@ export class CdkImageProcessingStack extends cdk.Stack {
       handler: 'index.handler',
       code: lambda.Code.fromAsset('lambda'),
       layers: [dependenciesLayer],
+      role: authenticatedRole.roleArn,
       memorySize: 512,
       environment: {
         BUCKET_NAME: imageBucket.bucketName,
@@ -206,51 +207,19 @@ export class CdkImageProcessingStack extends cdk.Stack {
     }));
     imageProcessingFunction.addToRolePolicy(new iam.PolicyStatement({
       actions: [
-        'es:ESHttpGet',
-        'es:ESHttpPut',
-        'es:ESHttpPost',
-        'es:ESHttpDelete'
+        'es:*'
       ],
-      resources: [`${openSearchDomain.domainArn}/*`],
+      resources: ['*'],
     }));
 
     // Create API Gateway
     const api = new apigateway.RestApi(this, 'ImageProcessingApi', {
       restApiName: 'Image Processing Service',
-      defaultCorsPreflightOptions: {
-        allowOrigins: apigateway.Cors.ALL_ORIGINS,
-        allowMethods: apigateway.Cors.ALL_METHODS,
-      }
     });
 
     // Create API resources and methods with AuthorizationType.NONE
     const imagesResource = api.root.addResource('images');
     
-    if (!imagesResource.node.tryFindChild('OPTIONS')) {
-      imagesResource.addMethod('OPTIONS', new apigateway.MockIntegration({
-        integrationResponses: [{
-          statusCode: '200',
-          responseParameters: {
-            'method.response.header.Access-Control-Allow-Origin': "'*'",
-            'method.response.header.Access-Control-Allow-Headers': "'Content-Type,X-Amz-Date,Authorization,X-Api-Key'",
-            'method.response.header.Access-Control-Allow-Methods': "'OPTIONS,POST,PUT,DELETE'",
-          },
-        }],
-        passthroughBehavior: apigateway.PassthroughBehavior.NEVER,
-        requestTemplates: {
-          "application/json": "{\"statusCode\": 200}"
-        },
-      }), {
-        methodResponses: [{
-          statusCode: '200',
-          responseParameters: {
-            'method.response.header.Access-Control-Allow-Origin': true,
-            'method.response.header.Access-Control-Allow-Headers': true,
-            'method.response.header.Access-Control-Allow-Methods': true,
-          },
-        }],
-      });
-    }
         
     imagesResource.addMethod('POST', new apigateway.LambdaIntegration(imageProcessingFunction), {
       authorizationType: apigateway.AuthorizationType.NONE
@@ -258,42 +227,20 @@ export class CdkImageProcessingStack extends cdk.Stack {
     imagesResource.addMethod('PUT', new apigateway.LambdaIntegration(imageProcessingFunction), {
       authorizationType: apigateway.AuthorizationType.NONE
     });  // Update
-    imagesResource.addMethod('DELETE', new apigateway.LambdaIntegration(imageProcessingFunction), {
+
+    const deleteResource = imagesResource.addResource('{image_id}');
+
+    deleteResource.addMethod('DELETE', new apigateway.LambdaIntegration(imageProcessingFunction), {
       authorizationType: apigateway.AuthorizationType.NONE
-    }); // Delete
+    }); // DELETE
     
     const searchResource = imagesResource.addResource('search');
-    
-    if (!searchResource.node.tryFindChild('OPTIONS')) {
-      imagesResource.addMethod('OPTIONS', new apigateway.MockIntegration({
-        integrationResponses: [{
-          statusCode: '200',
-          responseParameters: {
-            'method.response.header.Access-Control-Allow-Origin': "'*'",
-            'method.response.header.Access-Control-Allow-Headers': "'Content-Type,X-Amz-Date,Authorization,X-Api-Key'",
-            'method.response.header.Access-Control-Allow-Methods': "'OPTIONS,POST,PUT,DELETE'",
-          },
-        }],
-        passthroughBehavior: apigateway.PassthroughBehavior.NEVER,
-        requestTemplates: {
-          "application/json": "{\"statusCode\": 200}"
-        },
-      }), {
-        methodResponses: [{
-          statusCode: '200',
-          responseParameters: {
-            'method.response.header.Access-Control-Allow-Origin': true,
-            'method.response.header.Access-Control-Allow-Headers': true,
-            'method.response.header.Access-Control-Allow-Methods': true,
-          },
-        }],
-      });
-    }
 
     searchResource.addMethod('POST', new apigateway.LambdaIntegration(imageProcessingFunction), {
       authorizationType: apigateway.AuthorizationType.NONE
     }); // Search
     
+
 
     // Output the API Gateway URL
     new cdk.CfnOutput(this, 'ApiGatewayUrl', {

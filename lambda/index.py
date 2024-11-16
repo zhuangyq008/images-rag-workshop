@@ -6,6 +6,7 @@ import datetime
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import JSONResponse
 from mangum import Mangum
+from fastapi.middleware.cors import CORSMiddleware
 import traceback
 
 from models.api_response import APIResponse
@@ -32,6 +33,12 @@ logger.addHandler(logging.StreamHandler())
 
 # FastAPI app
 app = FastAPI(title="Image Processing API")
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],  
+    allow_methods=["*"], 
+    allow_headers=["*"], 
+)
 
 # Initialize clients
 s3_client = AWSClientFactory.create_s3_client()
@@ -241,7 +248,7 @@ async def search_images(request: ImageSearchRequest) -> APIResponse:
                 query_image_base64=request.query_image
             )
         bucket_prefix = f"s3://{Config.BUCKET_NAME}"
-        results = [{**result, "image_path": f"{Config.DDSTRIBUTION_DOMAIN}/{result['image_path'].replace(bucket_prefix, '')}"} for result in reranked_results]
+        results = [{**result, "image_path": f"{Config.DDSTRIBUTION_DOMAIN}{result['image_path'].replace(bucket_prefix, '')}"} for result in reranked_results]
         return APIResponse.success(
             message="Search completed successfully",
             data={"results": results}
