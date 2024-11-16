@@ -44,14 +44,14 @@ class ImageCombiner:
 
         return combined_image
 
-    def combine_two_images_horizontally(self, image1: Image.Image, image2: Image.Image, target_height: int = 600) -> Image.Image:
+    def combine_two_images_horizontally(self, image1: Image.Image, image2: Image.Image, target_height: int = 320) -> Image.Image:
         """
         Combines two images horizontally (side by side) while maintaining aspect ratio.
         
         Args:
             image1: First image (left side)
             image2: Second image (right side)
-            target_height: Target height for both images (default 600px)
+            target_height: Target height for both images (default 320px)
             
         Returns:
             Combined image with both images side by side

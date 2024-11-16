@@ -4,7 +4,24 @@ import base64
 import json
 from botocore.exceptions import ClientError
 from utils.config import Config
+from PIL import Image
+from fastapi import HTTPException
 
+def image_resize(base64_image_data,width,height):
+        try:
+            image_data = base64.b64decode(base64_image_data)
+            # 将二进制数据转换为 Pillow 支持的 Image 对象
+            image = Image.open(BytesIO(image_data))
+            # 调整图片大小到 320x320
+            resized_image = image.resize((width, height))
+
+            # 将调整后的图片直接转换为 Base64 编码
+            buffer = BytesIO()
+            resized_image.save(buffer, format=image.format)  # 使用原始格式保存到内存
+            resized_base64_data = base64.b64encode(buffer.getvalue()).decode()  # 转为 Base64 字符串
+            return resized_base64_data
+        except Exception as e:
+            raise HTTPException(status_code=500, detail=f"Error in resize image: {str(e)}")
 
 # 描述信息生成函数
 def enrich_image_desc(image_base64):
@@ -17,6 +34,9 @@ def enrich_image_desc(image_base64):
 
     # Start a conversation with the user message.
     user_message = Config.IMG_DESCN_PROMPT
+
+    
+    image_base64 = image_resize(image_base64,320,320)
 
     body = json.dumps(
         {
@@ -52,5 +72,6 @@ def enrich_image_desc(image_base64):
         return(response_body)
 
     except (ClientError, Exception) as e:
-        return(f"ERROR: Can't invoke '{model_id}'. Reason: {e}")
-        exit(1)
+        # return(f"ERROR: Can't invoke '{model_id}'. Reason: {e}")
+        # exit(1)
+        raise HTTPException(status_code=500, detail=f"Error in resize image: {str(e)}")
