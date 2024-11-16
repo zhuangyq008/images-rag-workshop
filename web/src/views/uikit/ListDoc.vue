@@ -2,6 +2,7 @@
 import { onMounted, ref } from 'vue';
 import { useToast } from 'primevue/usetoast';
 import Dialog from 'primevue/dialog';
+import { toRaw } from 'vue';
 
 
 
@@ -16,7 +17,8 @@ const query_text = ref('');
 const images_list = ref([]);
 const visible_delete = ref(false);
 const visible_update = ref(false);
-
+const select_item = ref(null);
+const update_text = ref('');
 onMounted(() => {
 
 });
@@ -122,12 +124,64 @@ function search() {
     
 }
 
-const show_delete = () => {
+const show_delete = (item) => {
+    console.log(item)
+    select_item.value = item
     visible_delete.value = true
 }
 
-const show_update = () => {
+const show_update = (item) => {
+    console.log(item)
+    select_item.value = item
+    update_text.value = item.description
     visible_update.value = true
+}
+
+function delete_item() {
+    console.log(toRaw(select_item.value))
+    axios.delete(APIURL+'/images/'  + toRaw(select_item.value).id , {
+        headers: {
+        'Content-Type': 'application/json'
+    }})
+            .then(response => {
+                console.log(response.data.data)
+                if(response.data.code === 200) {
+                    show('success','Delete Success',response.data.image_id)
+                    visible_delete.value = false
+                }else {
+                    show('danger','Delete Error','')
+                }
+            
+        })
+            .catch(error => {
+            console.error(error);
+        });
+    
+}
+
+function update_item() {
+    console.log(toRaw(select_item.value))
+    axios.put(APIURL+'/images' ,{
+        "image_id": toRaw(select_item.value).id,
+        "description": update_text.value
+    } ,{
+        headers: {
+        'Content-Type': 'application/json'
+    }})
+            .then(response => {
+                console.log(response.data.data)
+                if(response.data.code === 200) {
+                    show('success','Update Success',response.data.image_id)
+                    visible_update.value = false
+                }else {
+                    show('danger','Update Error','')
+                }
+            
+        })
+            .catch(error => {
+            console.error(error);
+        });
+    
 }
 </script>
 
@@ -166,9 +220,9 @@ const show_update = () => {
         <div class="card" style="display: flex; flex-wrap: wrap; gap: 1rem;">
           
             
-            <Card style="width: 25rem; overflow: hidden" v-for="(item, index) in images_list">
+            <Card style="width: 20%;margin-left: 3%;align-content: center; overflow: hidden" v-for="(item, index) in images_list">
                 <template #header>
-                    <img alt="user header" :src="item.image_path" />
+                    <img alt="user header" :src="'https://'+item.image_path" />
                 </template>
                 <template #title>{{ item.id }}</template>
                 <template #subtitle>score: {{ item.score }}</template>
@@ -179,8 +233,8 @@ const show_update = () => {
                 </template>
                 <template #footer>
                     <div class="flex gap-4 mt-1">
-                        <Button label="delete" severity="secondary" outlined class="w-full" @click="show_delete" />
-                        <Button label="update" class="w-full" @click="show_update"/>
+                        <Button label="delete" severity="secondary" outlined class="w-full" @click="show_delete(toRaw(item))" />
+                        <Button label="update" class="w-full" @click="show_update(toRaw(item))"/>
                     </div>
                 </template>
             </Card>
@@ -188,11 +242,12 @@ const show_update = () => {
 
         
     </div>
-    <Dialog v-model:visible="visible_delete" modal header="delete" :style="{ width: '25rem' }">
-
+    <Dialog v-model:visible="visible_delete" modal header="Confirm delete" style="width:35rem ;padding-left: 5%; ">
+        <Button label="delete" severity="danger" rounded @click="delete_item"/>
     </Dialog>
 
-    <Dialog v-model:visible="visible_update" modal header="delete" :style="{ width: '25rem' }">
-
-    </Dialog>
+    <Dialog v-model:visible="visible_update" modal header="update" :style="{ width: '25rem' }">
+        <Textarea v-model="update_text" rows="4" cols="30" type="text" size="large"  style="margin-bottom: 10px;width: 100%;" />
+        <Button label="update" severity="danger" rounded @click="update_item"/>
+    </Dialog>   
 </template>
