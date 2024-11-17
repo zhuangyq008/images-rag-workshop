@@ -36,8 +36,9 @@ Amazon linux 2023 参考
 
 ```
 yum install npm
-yum install python
 npm install -g aws-cdk
+npm install docker 
+service docker start
 
 ```
 执行部署的必要权限：

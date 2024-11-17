@@ -101,12 +101,15 @@ export class CdkImageProcessingStack extends cdk.Stack {
 
     // 创建 IAM 角色，授权 Cognito 用户池访问 OpenSearch
     const authenticatedRole = new iam.Role(this, 'MyAuthenticatedRole', {
-      assumedBy: new iam.FederatedPrincipal(
-        'cognito-identity.amazonaws.com',
-        {
-          'StringEquals': { 'cognito-identity.amazonaws.com:aud': identityPool.ref }
-        },
-        'sts:AssumeRoleWithWebIdentity'
+      assumedBy: new iam.CompositePrincipal(
+        new iam.FederatedPrincipal(
+          'cognito-identity.amazonaws.com',
+          {
+            'StringEquals': { 'cognito-identity.amazonaws.com:aud': identityPool.ref }
+          },
+          'sts:AssumeRoleWithWebIdentity'
+        ),
+        new iam.ServicePrincipal('lambda.amazonaws.com') // 允许 Lambda 假设该角色
       ),
       inlinePolicies: {
         CognitoAccessPolicy: new iam.PolicyDocument({
@@ -185,7 +188,7 @@ export class CdkImageProcessingStack extends cdk.Stack {
       handler: 'index.handler',
       code: lambda.Code.fromAsset('lambda'),
       layers: [dependenciesLayer],
-      role: authenticatedRole.roleArn,
+      role: authenticatedRole,
       memorySize: 512,
       environment: {
         BUCKET_NAME: imageBucket.bucketName,
