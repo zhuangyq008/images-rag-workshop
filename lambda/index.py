@@ -249,9 +249,10 @@ async def search_images(request: ImageSearchRequest) -> APIResponse:
             )
         bucket_prefix = f"s3://{Config.BUCKET_NAME}"
         results = [{**result, "image_path": f"{Config.DDSTRIBUTION_DOMAIN}{result['image_path'].replace(bucket_prefix, '')}"} for result in reranked_results]
+        sorted_results = sorted(results, key=lambda x: x['score'], reverse=True)
         return APIResponse.success(
             message="Search completed successfully",
-            data={"results": results}
+            data={"results": sorted_results}
         )
     except ImageProcessingError:
         raise
