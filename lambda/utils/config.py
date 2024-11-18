@@ -8,7 +8,7 @@ class Config:
     VECTOR_TEXT_DIMENSION = 1024
     OPENSEARCH_ENDPOINT = os.environ['OPENSEARCH_ENDPOINT']
     COLLECTION_INDEX_NAME = 'image-index-multi-1024'
-    MULTIMODEL_LLM_ID = 'anthropic.claude-3-5-sonnet-20240620-v1:0'
+    MULTIMODEL_LLM_ID = 'anthropic.claude-3-haiku-20240307-v1:0'
     EMVEDDINGMODEL_ID = 'amazon.titan-embed-text-v2:0'
     IMG_DESCN_PROMPT = """
         You will be analyzing an image and extracting its key features, including tags, and providing a brief summary of the image content.

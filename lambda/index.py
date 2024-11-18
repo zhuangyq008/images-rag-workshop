@@ -5,7 +5,6 @@ import logging
 import datetime
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import JSONResponse
-from mangum import Mangum
 from fastapi.middleware.cors import CORSMiddleware
 import traceback
 
@@ -60,39 +59,30 @@ except Exception as e:
 @app.exception_handler(ImageProcessingError)
 async def image_processing_exception_handler(request: Request, exc: ImageProcessingError):
     logger.error(f"ImageProcessingError: {exc.detail}")
-    return JSONResponse(
-        status_code=exc.status_code,
-        content=APIResponse.error(
-            code=exc.status_code,
-            message=exc.detail["message"],
-            data={
-                "error_code": exc.detail["error_code"],
-                "details": exc.detail["details"]
-            }
-        ).dict()
+    return APIResponse.error(
+        code=exc.status_code,
+        message=exc.detail["message"],
+        data={
+            "error_code": exc.detail["error_code"],
+            "details": exc.detail["details"]
+        }
     )
 
 @app.exception_handler(HTTPException)
 async def http_exception_handler(request: Request, exc: HTTPException):
     logger.error(f"HTTPException: {exc.detail}")
-    return JSONResponse(
-        status_code=exc.status_code,
-        content=APIResponse.error(
-            code=exc.status_code,
-            message=str(exc.detail)
-        ).dict()
+    return APIResponse.error(
+        code=exc.status_code,
+        message=str(exc.detail)
     )
 
 @app.exception_handler(Exception)
 async def general_exception_handler(request: Request, exc: Exception):
     logger.error(f"Unexpected error: {str(exc)}", exc_info=True)
-    return JSONResponse(
-        status_code=500,
-        content=APIResponse.error(
-            code=500,
-            message="Internal server error",
-            data={"error": str(exc)}
-        ).dict()
+    return APIResponse.error(
+        code=500,
+        message="Internal server error",
+        data={"error": str(exc)}
     )
 
 @app.post("/images")
@@ -303,4 +293,4 @@ async def delete_image(image_id: str) -> APIResponse:
         raise HTTPException(status_code=500, detail=str(e))
 
 # Lambda handler
-handler = Mangum(app)
+# handler = Mangum(app)

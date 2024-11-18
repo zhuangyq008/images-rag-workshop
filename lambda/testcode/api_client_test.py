@@ -288,14 +288,14 @@ def main():
     api_test = ImageProcessingAPITest(api_url)
     
     # Test directory upload
-    # directory = input("Enter the path to the image directory: ").strip()
+    directory = input("Enter the path to the image directory: ").strip()
     
-    # if not os.path.isdir(directory):
-    #     print(f"Error: {directory} is not a valid directory")
-    #     return
+    if not os.path.isdir(directory):
+        print(f"Error: {directory} is not a valid directory")
+        return
         
-    # print(f"\nStarting image upload from directory: {directory}")
-    # results = api_test.upload_directory(directory)
+    print(f"\nStarting image upload from directory: {directory}")
+    results = api_test.upload_directory(directory)
     
     # print("\nUpload Summary:")
     # print(f"Total images found: {results['total_images']}")
@@ -309,9 +309,9 @@ def main():
     #api_test.upload_image("/Users/enginez/Downloads/tlp.jpeg")
     #api_test.upload_image("/Users/enginez/Downloads/us-flag.jpeg")
     #api_test.upload_image("/Users/enginez/Downloads/blue backpack on a table.png")
-    results = api_test.search_by_text("蓝色书包")
-    # 结果只看到国旗
-    print(json.dumps(results, indent=4)) 
+    # results = api_test.search_by_text("蓝色书包")
+    # # 结果只看到国旗
+    # print(json.dumps(results, indent=4)) 
 
 
 if __name__ == "__main__":

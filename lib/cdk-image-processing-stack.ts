@@ -175,21 +175,12 @@ export class CdkImageProcessingStack extends cdk.Stack {
     // 获取 OpenSearch 的 endpoint
     const openSearchEndpoint = openSearchDomain.domainEndpoint;
 
-    // Create Lambda layer with dependencies
-    const dependenciesLayer = new lambda.LayerVersion(this, 'DependenciesLayer', {
-      code: lambda.Code.fromAsset('lambda/lambda_layer'),
-      compatibleRuntimes: [lambda.Runtime.PYTHON_3_8],
-      description: 'Dependencies for image processing lambda',
-    });
-
-    // Create Lambda function
-    const imageProcessingFunction = new lambda.Function(this, 'ImageProcessingFunction', {
-      runtime: lambda.Runtime.PYTHON_3_8,
-      handler: 'index.handler',
-      code: lambda.Code.fromAsset('lambda'),
-      layers: [dependenciesLayer],
+    // Create Lambda function using Docker with ARM64 architecture
+    const imageProcessingFunction = new lambda.DockerImageFunction(this, 'ImageProcessingFunctionContainer', {
+      code: lambda.DockerImageCode.fromImageAsset('lambda'),
       role: authenticatedRole,
       memorySize: 512,
+      architecture: lambda.Architecture.ARM_64,
       environment: {
         BUCKET_NAME: imageBucket.bucketName,
         OPENSEARCH_ENDPOINT: openSearchEndpoint,
@@ -200,7 +191,6 @@ export class CdkImageProcessingStack extends cdk.Stack {
 
     // Get caller identity ARN from context
     const callerArn = this.node.tryGetContext('callerArn') || cdk.Fn.importValue('CallerArn');
-
     
     // Grant Lambda permissions
     imageBucket.grantReadWrite(imageProcessingFunction);
@@ -242,8 +232,6 @@ export class CdkImageProcessingStack extends cdk.Stack {
     searchResource.addMethod('POST', new apigateway.LambdaIntegration(imageProcessingFunction), {
       authorizationType: apigateway.AuthorizationType.NONE
     }); // Search
-    
-
 
     // Output the API Gateway URL
     new cdk.CfnOutput(this, 'ApiGatewayUrl', {
@@ -256,6 +244,5 @@ export class CdkImageProcessingStack extends cdk.Stack {
       value: imageBucket.bucketName,
       description: 'The name of the S3 bucket for image storage',
     });
-
   }
 }
