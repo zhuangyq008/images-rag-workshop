@@ -14,4 +14,5 @@ class ImageUpdateRequest(BaseModel):
 class ImageSearchRequest(BaseModel):
     query_image: Optional[str]
     query_text: Optional[str]
+    rerank: Optional[str] = "False"
     k: Optional[int] = 10
