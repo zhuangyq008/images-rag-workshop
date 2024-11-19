@@ -231,19 +231,26 @@ async def search_images(request: ImageSearchRequest) -> APIResponse:
 
         logger.info(f"Search completed successfully, found {len(results)} results")
         # reranking
-        reranker = ImageRerank()
-        reranked_results = reranker.rerank(
-                items_list=results,
-                query_text=request.query_text,
-                query_image_base64=request.query_image
+        if request.rerank=="True":
+            logger.info("Start reranking")
+            reranker = ImageRerank()
+            reranked_results = reranker.rerank(
+                    items_list=results,
+                    query_text=request.query_text,
+                    query_image_base64=request.query_image
+                )
+            bucket_prefix = f"s3://{Config.BUCKET_NAME}"
+            results = [{**result, "image_path": f"{Config.DDSTRIBUTION_DOMAIN}{result['image_path'].replace(bucket_prefix, '')}"} for result in reranked_results]
+            sorted_results = sorted(results, key=lambda x: x['score'], reverse=True)
+            return APIResponse.success(
+                message="Search completed successfully",
+                data={"results": sorted_results}
             )
-        bucket_prefix = f"s3://{Config.BUCKET_NAME}"
-        results = [{**result, "image_path": f"{Config.DDSTRIBUTION_DOMAIN}{result['image_path'].replace(bucket_prefix, '')}"} for result in reranked_results]
-        sorted_results = sorted(results, key=lambda x: x['score'], reverse=True)
-        return APIResponse.success(
-            message="Search completed successfully",
-            data={"results": sorted_results}
-        )
+        else:
+            return APIResponse.success(
+                message="Search completed successfully",
+                data={"results": results}
+            )
     except ImageProcessingError:
         raise
     except Exception as e:
