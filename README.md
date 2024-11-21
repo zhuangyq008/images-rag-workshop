@@ -22,6 +22,19 @@
 
 ![1729170049892](image/README/1729170049892.png)
 
+**组件说明**
+
+Amazon Bedrock: 是Amazon 完全托管的AI服务，通过API的方式提供访问多种FMs 比如Anthropic/AI21 Labs/Cohere/Meta等模型
+
+Amazon Opensearch: 是AWS完全托管的Text Search/Vector 数据库
+
+Amazon S3:  Amazon S3是高可用的，几乎无限扩张的对象存储服务, 这边我们使用它来存储图片
+
+Amazon Lambda: 是Amazon Serverless的计算服务，在这边封装了image search的API如upload image/search image等
+
+Rerank:  这个组件是借助基于prompt Engineering的rerank，通过配置的prompt设计，将候选结果和查询一起输入到LLM，让LLM生成一个新的排序来表示候选结果的相关性。
+
+
 ## 本地开发说明
 
 cd lambda
@@ -30,7 +43,12 @@ uvicorn index:app --reload
 
 ## 部署说明
 
-前提：安装python 版本>3.9 npm 及cdk
+### 前提
+
+1. 安装python 版本>3.9 npm 及cdk
+2. [安装与配置AWS CLI](https://docs.aws.amazon.com/cli/latest/userguide/getting-started-install.html)
+3. 安装[AWS CDK](https://docs.aws.amazon.com/cdk/v2/guide/getting_started.html)
+4. 安装docker
 
 Amazon linux 2023 参考
 
@@ -41,27 +59,43 @@ npm install docker
 service docker start
 
 ```
-执行部署的必要权限：
 
-修改 images-rag-workshop/cdk.context.json `callerArn` 为执行权限
+### 工程结构说明
 
-This is a blank project for CDK development with TypeScript.
+```
+├── API_Docs.md  //API文档
+├── README.md
+├── asserts
+├── bin
+├── cdk.context.json
+├── cdk.json
+├── image
+├── jest.config.js
+├── lambda     //业务逻辑
+├── lib
+├── package.json
+├── tsconfig.json
+└── web     // 前端UI，通过node运行
+```
 
-The `cdk.json` file tells the CDK Toolkit how to execute your app.
+### Quick Start
 
-cd lambda
 
-sh build.sh
-
-cd ..
-
+```
+# 登陆aws public ECR 获取基础镜像（多阶段构建，这边是通过Lambda Web Adapter的镜像层构建Lambda容器）
 aws ecr-public get-login-password --region us-east-1 | docker login --username AWS --password-stdin public.ecr.aws
+```
 
+
+```
+# CDK依赖
 npm install
-
+# CDK在AWS上做环境准备的。引导Stacksets在AWS环境配置S3存储桶和ECR镜像仓库的配置
 cdk bootstrap
-
+# 
 cdk deploy
+```
+
 
 ## Useful commands
 
