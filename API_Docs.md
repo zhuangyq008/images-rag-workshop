@@ -102,7 +102,7 @@ Search for similar images using either an image or text query.
 {
     "query_image": "string",  // Optional: Base64 encoded image
     "query_text": "string",   // Optional: Text query
-    "rerank": "string",      // Optional: "True" | "False", "False" by default
+    "rerank": "bool",      // Optional: True | False, False by default
     "k": 10                  // Optional: Number of results (default: 10)
 }
 ```

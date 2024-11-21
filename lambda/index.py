@@ -231,8 +231,8 @@ async def search_images(request: ImageSearchRequest) -> APIResponse:
 
         logger.info(f"Search completed successfully, found {len(results)} results")
         # reranking
-        if request.rerank=="True":
-            logger.info("Start reranking")
+        if request.rerank==True:
+            logger.info("Search with reranking")
             reranker = ImageRerank()
             reranked_results = reranker.rerank(
                     items_list=results,
@@ -246,10 +246,21 @@ async def search_images(request: ImageSearchRequest) -> APIResponse:
                 message="Search completed successfully",
                 data={"results": sorted_results}
             )
-        else:
+        elif request.rerank==False:
+            logger.info(f"type of rerank {type(request.rerank)}")
+            logger.info("Search without reranking")
             return APIResponse.success(
                 message="Search completed successfully",
                 data={"results": results}
+            )
+        else:
+            logger.error(f"Only True or Flase is allowed for the rerank parameter. Got {request.rerank} instead.", exc_info=True)
+            raise InvalidRequestError(
+                "Either True or False for the rerank parameter",
+                {"provided_params": {
+                    "rerank": request.rerank,
+                    "type": type(request.rerank)
+                }}
             )
     except ImageProcessingError:
         raise
