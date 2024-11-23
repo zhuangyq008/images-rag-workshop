@@ -1,0 +1,8 @@
+tqdm>=4.65.0
+requests>=2.31.0
+boto3>=1.28.0
+opensearch-py>=2.3.0
+requests-aws4auth>=1.2.3
+Pillow>=10.0.0
+fastapi>=0.100.0
+numpy>=1.24.0
