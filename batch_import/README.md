@@ -67,6 +67,7 @@ python batch_import_to_opensearch.py --meta-file meta_2023.json --resume
 要重置或清理OpenSearch索引：
 
 ```bash
+# 慎重执行
 python clean_index.py
 ```
 
@@ -114,5 +115,30 @@ python clean_index.py
 * 当前处理状态
 * 遇到的任何错误'
 
+## 批量导入
 
+此工具用于将数据批量导入到OpenSearch中。启动导入进程：
+
+```bash
+#数据集下载
+curl -o meta_2023 https://datarepo.eng.ucsd.edu/mcauley_group/data/amazon_2023/raw/meta_categories/meta_Clothing_Shoes_and_Jewelry.jsonl.gz
+
+#sh执行授权
+chmod +x run_import.sh
+
+#运行脚本，根据需要导入
+./run_import.sh meta_2023_100.json [limit]
+
+#查看日志
+tail -f logs/import_YYYYMMDD_HHMMSS.log
+
+#查看错误
+cat import_errors_YYYYMMDD_HHMMSS.txt
 ```
+
+脚本将会：
+
+* 使用nohup在后台运行进程
+* 在logs目录中创建带时间戳的日志文件
+* 显示进程ID和日志文件位置
+* 即使关闭终端也会继续运行

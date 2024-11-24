@@ -14,7 +14,7 @@ def main():
         opensearch_client = OpenSearchClient(aws_session)
         
         # 删除索引
-        opensearch_client.delete_index()
+        ## opensearch_client.delete_index()
         
     except Exception as e:
         print(f"Error: {str(e)}")
