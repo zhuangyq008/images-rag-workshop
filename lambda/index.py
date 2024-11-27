@@ -249,6 +249,8 @@ async def search_images(request: ImageSearchRequest) -> APIResponse:
         else:
             logger.info(f"type of rerank {type(request.rerank)}")
             logger.info("Search without reranking")
+            bucket_prefix = f"s3://{Config.BUCKET_NAME}"
+            results = [{**result, "image_path": f"{Config.DDSTRIBUTION_DOMAIN}{result['image_path'].replace(bucket_prefix, '')}"} for result in results]
             return APIResponse.success(
                 message="Search completed successfully",
                 data={"results": results}
