@@ -67,13 +67,44 @@ class ImageRerank:
         }
 
         response = self.bedrock.invoke_model(
-            modelId=Config.MULTIMODEL_LLM_ID,
+            modelId=Config.RERANK_LLM_ID,
             body=json.dumps(body)
         )
         
         response_body = json.loads(response['body'].read())
         return response_body['content'][0]['text']
-
+    
+    def _call_nova(self, prompt, image_base64):
+        body = json.dumps(
+            {
+                "schemaVersion": "messages-v1",
+                "inferenceConfig": {"max_new_tokens": 1024},
+                "messages": [
+                    {
+                        "role": "user",
+                        "content": [
+                            {
+                                "image": {
+                                    "format": "png",
+                                    "source": {"bytes": image_base64},
+                                }
+                            },
+                            {
+                                "text": prompt
+                            }
+                        ],
+                    }
+                ]
+            }
+        )
+        response = self.bedrock.invoke_model(
+            modelId=Config.RERANK_LLM_ID,
+            body=body
+        )
+        
+        response_body = json.loads(response['body'].read())
+        return response_body['output']['message']['content'][0]['text']
+    
     def rerank(self, 
                items_list: List[Dict], 
                query_text: str,
@@ -186,12 +217,12 @@ To accomplish this task:
 
 Be as specific and accurate as possible in your response. If you are unable to identify a clear match, explain why in your response."""
 
-        # Get response from Claude
-        response = self._call_claude(prompt, combined_image_base64)
+        # Get response from Nova
+        response = self._call_nova(prompt, combined_image_base64)
         
         try:
             # Parse Claude's response
-            print(f"Claude's response: {response}")
+            print(f"Nova's response: {response}")
             matches = json.loads(response)
             # Rerank items based on Claude's response
             reranked_items = []

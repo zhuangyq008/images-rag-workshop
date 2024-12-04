@@ -7,22 +7,30 @@ class EmbeddingGenerator:
     def __init__(self, bedrock_runtime_client):
         self.bedrock_runtime = bedrock_runtime_client
 
-    def generate_embedding(self, data, mode):
-        if mode == 'text':
+    def generate_embedding(self, input_image, input_description):
+        if input_image=='':
             body = json.dumps({
-                "inputText": data
-            })
-            model_id = Config.EMVEDDINGMODEL_ID
-        elif mode == 'image':
-            body = json.dumps({
-                "inputImage": data,
+                "inputText": input_description,
                 "embeddingConfig": {
                     "outputEmbeddingLength": Config.VECTOR_DIMENSION
                 }
             })
-            model_id = "amazon.titan-embed-image-v1"
+        elif input_description=='':
+            body = json.dumps({
+                "inputImage": input_image,
+                "embeddingConfig": {
+                    "outputEmbeddingLength": Config.VECTOR_DIMENSION
+                }
+            })
         else:
-            raise HTTPException(status_code=400, detail="Invalid mode. Use 'text' or 'image'.")
+            body = json.dumps({
+                "inputText": input_description,
+                "inputImage": input_image,
+                "embeddingConfig": {
+                    "outputEmbeddingLength": Config.VECTOR_DIMENSION
+                }
+            })
+        model_id = Config.EMVEDDINGMODEL_ID
 
         try:
             response = self.bedrock_runtime.invoke_model(

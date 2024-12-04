@@ -13,7 +13,7 @@ import '@/assets/tailwind.css';
 
 const app = createApp(App);
 
-window.apiUrl = '';
+window.apiUrl = 'https://qp4vxwpqq2.execute-api.us-east-1.amazonaws.com/prod'; // 'https://hot26r2aaa.execute-api.us-east-1.amazonaws.com/prod';
 
 app.use(router);
 app.use(PrimeVue, {

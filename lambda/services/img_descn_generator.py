@@ -40,26 +40,27 @@ def enrich_image_desc(image_base64):
 
     body = json.dumps(
         {
-            "anthropic_version": "bedrock-2023-05-31",
-            "max_tokens": 5000,
+            "schemaVersion": "messages-v1",
+            "inferenceConfig": {"max_new_tokens": 5000},
             "messages": [
                 {
                     "role": "user",
                     "content": [
                         {
-                            "type": "image",
-                            "source": {
-                                "type": "base64",
-                                "media_type": "image/jpeg",
-                                "data": image_base64,
-                            },
+                            "image": {
+                                "format": "jpg",
+                                "source": {"bytes": image_base64},
+                            }
                         },
-                        {"type": "text", "text": user_message},
+                        {
+                            "text": user_message
+                        }
                     ],
                 }
-            ],
+            ]
         }
     )
+
     try:
         # Send the message to the model, using a basic inference configuration.
         response = client.invoke_model(
@@ -68,7 +69,7 @@ def enrich_image_desc(image_base64):
         )
 
         # Extract and print the response text.
-        response_body = json.loads(response.get("body").read())['content'][0]['text']
+        response_body = json.loads(response.get("body").read())['output']['message']['content'][0]['text']
         return(response_body)
 
     except (ClientError, Exception) as e:

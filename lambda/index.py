@@ -113,20 +113,24 @@ async def upload_image(request: ImageUploadRequest) -> APIResponse:
         except Exception as e:
             logger.error(f"Failed to upload image to S3: {str(e)}")
             raise ImageUploadError("Failed to upload image to S3", {"detail": str(e)})
-        # Generate description
+        
+        # Get description
         description = ''
-        try:
-            logger.info("Starting description generation")
-            description = enrich_image_desc(request.image)
-            logger.info("Successfully generated description")
-        except Exception as e:
-            logger.error(f"Failed to generate description: {str(e)}")
-            raise ImageUploadError("Failed to generate description", {"detail": str(e)})
+        if request.description == '':
+            # Generate description
+            try:
+                logger.info("Starting description generation")
+                description = enrich_image_desc(request.image)
+                logger.info("Successfully generated description")
+            except Exception as e:
+                logger.error(f"Failed to generate description: {str(e)}")
+                raise ImageUploadError("Failed to generate description", {"detail": str(e)})
+        else:
+            description = request.description
         # Generate embedding
         try:
             logger.info("Starting embedding generation")
-            embedding = embedding_generator.generate_embedding(request.image, 'image')
-            description_embedding = embedding_generator.generate_embedding(description, 'text')
+            embedding = embedding_generator.generate_embedding(request.image, description)
             logger.info("Successfully generated image embedding")
         except Exception as e:
             tb_str = traceback.format_exc()
@@ -140,8 +144,7 @@ async def upload_image(request: ImageUploadRequest) -> APIResponse:
             document = {
                     'id': image_id,
                     'description': description,
-                    'image_embedding': embedding,
-                    'description_embedding': description_embedding,
+                    'embedding': embedding,
                     'createtime': dt,
                     'image_path': s3_key
             }                           
@@ -232,6 +235,9 @@ async def search_images(request: ImageSearchRequest) -> APIResponse:
         logger.info(f"Search completed successfully, found {len(results)} results")
         # reranking
         if request.rerank==True:
+            if not request.query_text:
+                logger.error("When using reranking, query text must be provided.")
+                raise InvalidRequestError("Query text empty.", {"detail": "When using reranking, query text must be provided."})
             logger.info("Search with reranking")
             reranker = ImageRerank()
             reranked_results = reranker.rerank(

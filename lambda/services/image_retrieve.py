@@ -31,10 +31,10 @@ class ImageRetrieve:
     def search_by_text(self, query_text: str, k: int = 5) -> List[Dict]:
         try:
             # Generate embedding for the query text
-            embedding = self.embedding_generator.generate_embedding(query_text, mode='text')
+            embedding = self.embedding_generator.generate_embedding(input_image='',input_description=query_text)
 
             # Search OpenSearch using the embedding
-            results = self.opensearch_client.query_by_text(embedding, k)
+            results = self.opensearch_client.query(embedding, k)
             
             return results
         except Exception as e:
@@ -44,10 +44,10 @@ class ImageRetrieve:
         try:
             # Generate embedding for the query image
             image_encode = self.image_resize(image_encode,320,320)
-            embedding = self.embedding_generator.generate_embedding(image_encode, mode='image')
+            embedding = self.embedding_generator.generate_embedding(input_image=image_encode, input_description='')
             
             # Search OpenSearch using the embedding
-            results = self.opensearch_client.query_by_image(embedding, k)
+            results = self.opensearch_client.query(embedding, k)
             
             return results
         except Exception as e:
@@ -55,12 +55,11 @@ class ImageRetrieve:
     def search_by_text_and_image(self, query_text: str, image_encode, k: int = 5) -> List[Dict]:
         try:
             # Generate embeddings for the query text and image
-            text_embedding = self.embedding_generator.generate_embedding(query_text, mode='text')
             image_encode = self.image_resize(image_encode,320,320)
-            image_embedding = self.embedding_generator.generate_embedding(image_encode, mode='image')
+            embedding = self.embedding_generator.generate_embedding(input_image=image_encode, input_description=query_text)
 
             # Search OpenSearch using the embeddings
-            results = self.opensearch_client.query_by_text_and_image(text_embedding, image_embedding, k)
+            results = self.opensearch_client.query(embedding, k)
 
             return results
         except Exception as e:

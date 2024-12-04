@@ -42,14 +42,10 @@ class OpenSearchClient:
                         "description": {"type": "text"},
                         "createtime": {"type": "text"},
                         "image_path":{"type": "text"},
-                        "image_embedding": {
+                        "embedding": {
                             "type": "knn_vector",
                             "dimension": Config.VECTOR_DIMENSION,
-                        },
-                        "description_embedding": {
-                            "type": "knn_vector",
-                            "dimension": Config.VECTOR_TEXT_DIMENSION,
-                        }                    
+                        }                  
                     }
                 },
             }
@@ -98,92 +94,16 @@ class OpenSearchClient:
         except Exception as e:
             raise HTTPException(status_code=500, detail=f"Error deleting document: {str(e)}")
     # default type is image embedding
-    def query_by_image(self, embedding, k):
+    def query(self, embedding, k):
         index_name = Config.COLLECTION_INDEX_NAME
         query = {
             'size': k,
             'query': {
                 'knn': {
-                    'image_embedding': {
+                    'embedding': {
                         'vector': embedding,
                         'k': k
                     }
-                }
-            }
-        }
-        try:
-            response = self.client.search(
-                index=index_name,
-                body=query
-            )
-            hits = response['hits']['hits']
-            return [
-                {
-                    'id': hit['_id'],
-                    'score': hit['_score'],
-                    'description': hit['_source']['description'],
-                    'image_path': hit['_source']['image_path']
-                }
-                for hit in hits
-            ]
-        except Exception as e:
-            raise HTTPException(status_code=500, detail=f"Error querying OpenSearch: {str(e)}")
-
-    def query_by_text(self, embedding, k):
-        index_name = Config.COLLECTION_INDEX_NAME
-        query = {
-            'size': k,
-            'query': {
-                'knn': {
-                    'description_embedding': {
-                        'vector': embedding,
-                        'k': k
-                    }
-                }
-            }
-        }
-        try:
-            response = self.client.search(
-                index=index_name,
-                body=query
-            )
-            hits = response['hits']['hits']
-            return [
-                {
-                    'id': hit['_id'],
-                    'score': hit['_score'],
-                    'description': hit['_source']['description'],
-                    'image_path': hit['_source']['image_path']
-                }
-                for hit in hits
-            ]
-        except Exception as e:
-            raise HTTPException(status_code=500, detail=f"Error querying OpenSearch: {str(e)}")
-
-    def query_by_text_and_image(self, text_embedding, image_embedding,k):
-        index_name = Config.COLLECTION_INDEX_NAME
-        query = {
-            'size': k,
-            'query': {
-                'bool': {
-                    'must': [
-                        {
-                            'knn': {
-                                'image_embedding': {
-                                    'vector': image_embedding,
-                                    'k': k
-                                }
-                            }
-                        },
-                        {
-                            'knn': {
-                                'description_embedding': {
-                                    'vector': text_embedding,
-                                    'k': k
-                                }
-                            }
-                        }
-                    ]
                 }
             }
         }

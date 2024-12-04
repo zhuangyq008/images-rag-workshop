@@ -105,6 +105,7 @@ function onUpload(image) {
 function search() {
     loading.value = true;
     const body = {}
+    // body.rerank = true
     if (search_image.value != '') {
         body.query_image = search_image.value 
     }
