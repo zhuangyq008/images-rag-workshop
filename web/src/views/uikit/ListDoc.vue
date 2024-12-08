@@ -106,12 +106,9 @@ function search() {
     loading.value = true;
     const body = {}
     // body.rerank = true
-    if (search_image.value != '') {
-        body.query_image = search_image.value 
-    }
-    if (query_text.value != '') {
-        body.query_text = query_text.value 
-    }
+    body.query_image = search_image.value
+    body.query_text = query_text.value
+    body.k = 5
     axios.post(APIURL+'/images/search',body , {
         headers: {
         'Content-Type': 'application/json'

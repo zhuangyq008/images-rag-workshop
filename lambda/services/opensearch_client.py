@@ -2,6 +2,7 @@ from fastapi import HTTPException
 from opensearchpy import OpenSearch, RequestsHttpConnection
 from requests_aws4auth import AWS4Auth
 from utils.config import Config
+import json
 
 class OpenSearchClient:
     def __init__(self):
@@ -65,7 +66,21 @@ class OpenSearchClient:
             return response
         except Exception as e:
             raise HTTPException(status_code=500, detail=f"Error indexing document: {str(e)}")
-
+        
+    def bulk_upload(self, documents):
+        try:
+            action = json.dumps({ 'index': { '_index': Config.COLLECTION_INDEX_NAME} })
+            body_ = ''
+            for document in documents:
+                body_ = body_ + action + "\n" + json.dumps(document) + "\n"
+            response = self.client.bulk(
+                index = Config.COLLECTION_INDEX_NAME,
+                body = body_
+            )
+            return response
+        except Exception as e:
+            raise HTTPException(status_code=500, detail=f"Error indexing document: {str(e)}")
+    
     def update_document(self, image_id, description, tags):
         index_name = Config.COLLECTION_INDEX_NAME
         try:

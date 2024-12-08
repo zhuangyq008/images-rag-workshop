@@ -22,6 +22,47 @@ export class CdkImageProcessingStack extends cdk.Stack {
       blockPublicAccess: s3.BlockPublicAccess.BLOCK_ALL,
     });
 
+    // Create new IAM role for Bedrock
+    const bedrockRole = new iam.Role(this, 'BedrockRole', {
+      assumedBy: new iam.ServicePrincipal('bedrock.amazonaws.com'),
+      description: 'IAM role for Amazon Bedrock',
+    });
+
+    // Add trust relationship
+    bedrockRole.assumeRolePolicy?.addStatements(
+      new iam.PolicyStatement({
+        effect: iam.Effect.ALLOW,
+        principals: [new iam.ServicePrincipal('bedrock.amazonaws.com')],
+        actions: ['sts:AssumeRole'],
+        conditions: {
+          StringEquals: {
+            'aws:SourceAccount': this.account,
+          },
+          ArnEquals: {
+            'aws:SourceArn': `arn:aws:bedrock:${this.region}:${this.account}:model-invocation-job/*`,
+          },
+        },
+      })
+    );
+
+    // Add permissions policy
+    bedrockRole.addToPolicy(
+      new iam.PolicyStatement({
+        sid: 'S3Access',
+        effect: iam.Effect.ALLOW,
+        actions: ['s3:GetObject', 's3:PutObject', 's3:ListBucket'],
+        resources: [
+          imageBucket.bucketArn,
+          `${imageBucket.bucketArn}/*`,
+        ],
+        conditions: {
+          StringEquals: {
+            'aws:ResourceAccount': [this.account],
+          },
+        },
+      })
+    );
+
     // 创建 Origin Access Control
     const oac = new cloudfront.CfnOriginAccessControl(this, 'OAC', {
       originAccessControlConfig: {
@@ -184,7 +225,8 @@ export class CdkImageProcessingStack extends cdk.Stack {
       environment: {
         BUCKET_NAME: imageBucket.bucketName,
         OPENSEARCH_ENDPOINT: openSearchEndpoint,
-        DDSTRIBUTION_DOMAIN: cloudFrontDistribution.domainName
+        DDSTRIBUTION_DOMAIN: cloudFrontDistribution.domainName,
+        BEDROCK_ROLE_ARN: bedrockRole.roleArn  // Add the Bedrock role ARN to the environment variables
       },
       timeout: cdk.Duration.seconds(30),
     });
@@ -233,6 +275,12 @@ export class CdkImageProcessingStack extends cdk.Stack {
       authorizationType: apigateway.AuthorizationType.NONE
     }); // Search
 
+    const batchUploadResource = imagesResource.addResource('batch-upload');
+
+    batchUploadResource.addMethod('POST', new apigateway.LambdaIntegration(imageProcessingFunction), {
+      authorizationType: apigateway.AuthorizationType.NONE
+    }); // Batch Upload
+
     // Output the API Gateway URL
     new cdk.CfnOutput(this, 'ApiGatewayUrl', {
       value: api.url,
@@ -243,6 +291,12 @@ export class CdkImageProcessingStack extends cdk.Stack {
     new cdk.CfnOutput(this, 'S3BucketName', {
       value: imageBucket.bucketName,
       description: 'The name of the S3 bucket for image storage',
+    });
+
+    // Output the Bedrock IAM Role ARN
+    new cdk.CfnOutput(this, 'BedrockRoleArn', {
+      value: bedrockRole.roleArn,
+      description: 'The ARN of the IAM role for Amazon Bedrock',
     });
   }
 }

@@ -6,6 +6,9 @@ from botocore.exceptions import ClientError
 from utils.config import Config
 from PIL import Image
 from fastapi import HTTPException
+from utils.aws_client_factory import AWSClientFactory
+import uuid
+import jsonlines
 
 def image_resize(base64_image_data,width,height):
         try:
@@ -76,3 +79,63 @@ def enrich_image_desc(image_base64):
         # return(f"ERROR: Can't invoke '{model_id}'. Reason: {e}")
         # exit(1)
         raise HTTPException(status_code=500, detail=f"Error in resize image: {str(e)}")
+
+def description_generator_invocation_job(image_base64_list):
+    # Initialization: Initialize an S3 client
+    s3_client = AWSClientFactory.create_s3_client()
+    # Initialization: Initialize a bedrock client
+    bedrock_client = AWSClientFactory.create_bedrock_client()
+    # Initialization: Invocation job configuration
+    description_payload_file_name = f"{str(uuid.uuid4())}-descn.jsonl"
+    discriptionGeneratorInputDataConfig=({
+        "s3InputDataConfig": {
+            "s3Uri": f"s3://{Config.BUCKET_NAME}/INVOCATION-INPUT-NO-IMAGE/{description_payload_file_name}"
+        }
+    })
+    description_output_folder_name = f"{str(uuid.uuid4())}-descn/"
+    discriptionGeneratorOutputDataConfig=({
+        "s3OutputDataConfig": {
+            "s3Uri": f"s3://{Config.BUCKET_NAME}/INVOCATION-OUTPUT-NO-IMAGE/{description_output_folder_name}"
+        }
+    })
+    # Construct description generation payload
+    descn_gen_batch_inference_data = []
+    for image_base64 in image_base64_list:
+        descn_gen_payload = {
+            "recordId": str(uuid.uuid4()), 
+            "modelInput": {
+                "schemaVersion": "messages-v1",
+                "inferenceConfig": {"max_new_tokens": 5000},
+                "messages": [
+                    {
+                        "role": "user",
+                        "content": [
+                            {
+                                "image": {
+                                    "format": "jpg",
+                                    "source": {"bytes": image_base64},
+                                }
+                            },
+                            {
+                                "text": "Generate description for the image"
+                            }
+                        ],
+                    }
+                ]
+            }
+        }
+        descn_gen_batch_inference_data.append(descn_gen_payload)
+    with jsonlines.open(f'tmp/{description_payload_file_name}', 'w') as writer:
+        writer.write_all(descn_gen_batch_inference_data)
+    s3_client.upload_file(description_payload_file_name, Config.BUCKET_NAME, 'INVOCATION-INPUT-NO-IMAGE/'+description_payload_file_name)
+    # Create and start invocation job
+    descn_gen_response = bedrock_client.create_model_invocation_job(
+        roleArn=Config.BEDROCK_INVOKE_JOB_ROLE,
+        modelId=Config.MULTIMODEL_LLM_ID,
+        jobName="generate-description-batch-job",
+        inputDataConfig=discriptionGeneratorInputDataConfig,
+        outputDataConfig=discriptionGeneratorOutputDataConfig
+    )
+    # Polling
+    jobArn = descn_gen_response.get('jobArn')
+    return

@@ -6,6 +6,10 @@ class AWSClientFactory:
         return boto3.client('s3')
 
     @staticmethod
+    def create_bedrock_client():
+        return boto3.client('bedrock')
+
+    @staticmethod
     def create_bedrock_runtime_client():
         return boto3.client('bedrock-runtime')
 

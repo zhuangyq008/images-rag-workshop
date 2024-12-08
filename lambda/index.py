@@ -3,13 +3,13 @@ import base64
 import uuid
 import logging
 import datetime
-from fastapi import FastAPI, HTTPException, Request
+from fastapi import FastAPI, HTTPException, Request, UploadFile
 from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 import traceback
 
 from models.api_response import APIResponse
-from models.request_models import ImageUploadRequest, ImageUpdateRequest, ImageSearchRequest
+from models.request_models import ImageUploadRequest, ImageUpdateRequest, ImageSearchRequest, BatchUploadRequest
 from utils.config import Config
 from utils.aws_client_factory import AWSClientFactory
 from utils.exceptions import (
@@ -172,6 +172,86 @@ async def upload_image(request: ImageUploadRequest) -> APIResponse:
     except Exception as e:
         logger.error(f"Unexpected error during image upload: {str(e)}", exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/images/batch-upload")
+async def batch_upload(request: BatchUploadRequest) -> APIResponse:
+    logger.info("Starting batch upload process")
+    try:
+        # Initialization: Create a reusable Paginator
+        paginator = s3_client.get_paginator('list_objects_v2')
+        first = True
+        next_token = None
+
+        while first or next_token:
+            first = False
+            # Create a PageIterator from the Paginator
+            page_iterator = paginator.paginate(
+                Bucket=Config.BUCKET_NAME,
+                Prefix=request.s3_folder_prefix,
+                PaginationConfig={'PageSize': Config.BATCH_SIZE,'StartingToken':next_token}
+            )
+            # A page is one batch
+            for page in page_iterator:
+                # Get next token
+                is_truncated = page['IsTruncated']
+                if is_truncated:
+                    next_token = page['NextContinuationToken']
+                else:
+                    next_token = None
+                # Construct douments and batch inference data
+                documents = []
+                for obj in page['Contents']:
+                    # Get image base64
+                    s3_key = obj['Key']
+                    response = s3_client.get_object(Bucket=Config.BUCKET_NAME,Key=s3_key)
+                    streaming_body = response.get("Body").read()
+                    image_base64 = base64.b64encode(streaming_body).decode('utf-8')
+                    image_id = str(uuid.uuid4())
+                    dt = datetime.datetime.now().isoformat()
+                    description = ''
+                    embedding = ''
+                    # Generate description
+                    try:
+                        logger.info("Starting description generation")
+                        description = enrich_image_desc(image_base64)
+                        logger.info("Successfully generated description")
+                    except Exception as e:
+                        logger.error(f"Failed to generate description: {str(e)}")
+                        raise ImageUploadError("Failed to generate description", {"detail": str(e)})
+                    # Generate embedding
+                    try:
+                        logger.info("Starting embedding generation")
+                        embedding = embedding_generator.generate_embedding(image_base64, description)
+                        logger.info("Successfully generated embedding")
+                    except Exception as e:
+                        tb_str = traceback.format_exc()
+                        logger.error(f"Failed to generate image embedding: {str(e)}")
+                        print(tb_str)
+                        raise ImageUploadError("Failed to generate image embedding", {"detail": str(e)})
+                    document = {
+                        'id': image_id,
+                        'description': description,
+                        'embedding': embedding,
+                        'createtime': dt,
+                        'image_path': s3_key
+                    }
+                    documents.append(document)
+                # Bulk upload
+                try:
+                    logger.info("Starting bulk upload")
+                    opensearch_client.bulk_upload(documents)
+                    logger.info("Bulk upload ended successfully")
+                except Exception as e:
+                    logger.error(f"Batch upload failed in OpenSearch: {str(e)}")
+                    raise OpenSearchError("Batch upload failed in OpenSearch:", {"detail": str(e)})
+        
+        return APIResponse.success(
+            message="Batch upload completed successfully"
+        )
+        #  return {"message": "Batch upload completed successfully"}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error in batch upload: {str(e)}")
+
 
 @app.put("/images")
 async def update_image(request: ImageUpdateRequest) -> APIResponse:

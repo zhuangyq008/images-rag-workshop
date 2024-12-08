@@ -16,3 +16,6 @@ class ImageSearchRequest(BaseModel):
     query_text: Optional[str]
     rerank: Optional[bool] = False
     k: Optional[int] = 10
+
+class BatchUploadRequest(BaseModel):
+    s3_folder_prefix: str
