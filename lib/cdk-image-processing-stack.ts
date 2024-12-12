@@ -237,7 +237,7 @@ export class CdkImageProcessingStack extends cdk.Stack {
     // Grant Lambda permissions
     imageBucket.grantReadWrite(imageProcessingFunction);
     imageProcessingFunction.addToRolePolicy(new iam.PolicyStatement({
-      actions: ['bedrock:InvokeModel'],
+      actions: ['bedrock:InvokeModel', "bedrock:CreateModelInvocationJob", "bedrock:ListModelInvocationJobs", "bedrock:GetModelInvocationJob"],
       resources: ['*'],
     }));
     imageProcessingFunction.addToRolePolicy(new iam.PolicyStatement({
@@ -281,12 +281,25 @@ export class CdkImageProcessingStack extends cdk.Stack {
       authorizationType: apigateway.AuthorizationType.NONE
     }); // Batch Upload
 
+    const batchDescnEnrichResource = imagesResource.addResource('batch-descn-enrich');
+
+    batchDescnEnrichResource.addMethod('POST', new apigateway.LambdaIntegration(imageProcessingFunction), {
+      authorizationType: apigateway.AuthorizationType.NONE
+    }); // Batch Descn Enrich
+
+    // Create API resources and methods for checking batch job state with AuthorizationType.NONE
+    const checkJobStateResource = api.root.addResource('check-batch-job-state');
+
+    checkJobStateResource.addMethod('POST', new apigateway.LambdaIntegration(imageProcessingFunction), {
+      authorizationType: apigateway.AuthorizationType.NONE
+    }); // Check batch job state
+
     // Output the API Gateway URL
     new cdk.CfnOutput(this, 'ApiGatewayUrl', {
       value: api.url,
       description: 'The URL of the API Gateway',
     });
-
+    
     // Output the S3 bucket name
     new cdk.CfnOutput(this, 'S3BucketName', {
       value: imageBucket.bucketName,

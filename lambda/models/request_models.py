@@ -19,3 +19,9 @@ class ImageSearchRequest(BaseModel):
 
 class BatchUploadRequest(BaseModel):
     s3_folder_prefix: str
+
+class BatchDescnEnrichRequest(BaseModel):
+    s3_folder_prefix: str
+
+class CheckBatchJobStateRequery(BaseModel):
+    jobArn_list: List[str]

@@ -9,7 +9,7 @@ from fastapi.middleware.cors import CORSMiddleware
 import traceback
 
 from models.api_response import APIResponse
-from models.request_models import ImageUploadRequest, ImageUpdateRequest, ImageSearchRequest, BatchUploadRequest
+from models.request_models import ImageUploadRequest, ImageUpdateRequest, ImageSearchRequest, BatchUploadRequest, BatchDescnEnrichRequest, CheckBatchJobStateRequery
 from utils.config import Config
 from utils.aws_client_factory import AWSClientFactory
 from utils.exceptions import (
@@ -22,7 +22,7 @@ from utils.exceptions import (
 from services.opensearch_client import OpenSearchClient
 from services.embedding_generator import EmbeddingGenerator
 from services.image_retrieve import ImageRetrieve
-from services.img_descn_generator import enrich_image_desc
+from services.img_descn_generator import enrich_image_desc, description_generator_invocation_job
 from services.image_rerank import ImageRerank
 
 # Configure logging
@@ -388,6 +388,80 @@ async def delete_image(image_id: str) -> APIResponse:
     except Exception as e:
         logger.error(f"Unexpected error during image deletion: {str(e)}", exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/images/batch-descn-enrich")
+async def batch_descn_enrich(request: BatchDescnEnrichRequest) -> APIResponse:
+    logger.info("Starting batch description enrichment process")
+    try:
+        # Initialization: Create a reusable Paginator
+        paginator = s3_client.get_paginator('list_objects_v2')
+        first = True
+        next_token = None
+        response_data = {}
+        jobArn_list = []
+        batch_num = 0
+
+        while first or next_token:
+            logger.info(f"logger {str(batch_num)}")
+            first = False
+            # Create a PageIterator from the Paginator
+            page_iterator = paginator.paginate(
+                Bucket=Config.BUCKET_NAME,
+                Prefix=request.s3_folder_prefix,
+                PaginationConfig={'PageSize': Config.BATCH_SIZE,'StartingToken':next_token}
+            )
+            # A page is one batch
+            for page in page_iterator:
+                # Get next token
+                is_truncated = page['IsTruncated']
+                if is_truncated:
+                    next_token = page['NextContinuationToken']
+                else:
+                    next_token = None
+                # Construct douments and batch inference data
+                image_base64_list = []
+                for obj in page['Contents']:
+                    # Get image base64
+                    s3_key = obj['Key']
+                    response = s3_client.get_object(Bucket=Config.BUCKET_NAME,Key=s3_key)
+                    streaming_body = response.get("Body").read()
+                    image_base64 = base64.b64encode(streaming_body).decode('utf-8')
+                    image_base64_list.append(image_base64)
+                logger.info("length:")
+                logger.info(str(len(image_base64_list)))
+                # Batch generate description
+                jobArn, output_s3_uri, imgb64_s3_uri = description_generator_invocation_job(image_base64_list, batch_num)
+                # Update batch_num
+                batch_num += 1
+                # Construct response data
+                response_data[jobArn] = {"output_s3_uri": output_s3_uri,"imgb64_s3_uri": imgb64_s3_uri}
+                jobArn_list.append(jobArn)
+        
+        response_data["jobArn_list"] = jobArn_list
+        
+        return APIResponse.success(
+            message="Batch description enrichment successfully started",
+            data=response_data
+        )
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error in batch job creation: {str(e)}")
+
+@app.post("/check-batch-job-state")
+async def batch_descn_enrich(request: CheckBatchJobStateRequery) -> APIResponse:
+    logger.info("Check batch job state")
+    try:
+        respond_data = {}
+        client = AWSClientFactory.create_bedrock_client()
+        for jobArn in request.jobArn_list:
+            status = client.get_model_invocation_job(jobIdentifier=jobArn)['status']
+            respond_data[jobArn] = status
+        
+        return APIResponse.success(
+            message="Batch description enrichment successfully started",
+            data=respond_data
+        )
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error in batch job creation: {str(e)}")
 
 # Lambda handler
 # handler = Mangum(app)
