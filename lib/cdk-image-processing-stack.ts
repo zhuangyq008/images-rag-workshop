@@ -228,7 +228,7 @@ export class CdkImageProcessingStack extends cdk.Stack {
         DDSTRIBUTION_DOMAIN: cloudFrontDistribution.domainName,
         BEDROCK_ROLE_ARN: bedrockRole.roleArn  // Add the Bedrock role ARN to the environment variables
       },
-      timeout: cdk.Duration.seconds(30),
+      timeout: cdk.Duration.seconds(900),
     });
 
     // Get caller identity ARN from context
@@ -286,6 +286,12 @@ export class CdkImageProcessingStack extends cdk.Stack {
     batchDescnEnrichResource.addMethod('POST', new apigateway.LambdaIntegration(imageProcessingFunction), {
       authorizationType: apigateway.AuthorizationType.NONE
     }); // Batch Descn Enrich
+
+    const batchEmbeddingGenResource = imagesResource.addResource('batch-embedding-gen');
+
+    batchEmbeddingGenResource.addMethod('POST', new apigateway.LambdaIntegration(imageProcessingFunction), {
+      authorizationType: apigateway.AuthorizationType.NONE
+    }); // Batch Embedding Generation
 
     // Create API resources and methods for checking batch job state with AuthorizationType.NONE
     const checkJobStateResource = api.root.addResource('check-batch-job-state');

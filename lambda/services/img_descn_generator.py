@@ -110,56 +110,76 @@ def description_generator_invocation_job(image_base64_list, batch_num):
         }
     })
 
-    # Construct description generation payload
-    descn_gen_batch_inference_data = []
-    image_base64_json = {}
-    count = 0
-    for image_base64 in image_base64_list:
-        # Get current time
-        record_id = str(count).zfill(11)
-        descn_gen_payload = {
-            "recordId": record_id, 
-            "modelInput": {
-                "schemaVersion": "messages-v1",
-                "inferenceConfig": {"max_new_tokens": 5000},
-                "messages": [
-                    {
-                        "role": "user",
-                        "content": [
-                            {
-                                "image": {
-                                    "format": "jpg",
-                                    "source": {"bytes": image_base64},
+    try:
+        # Construct description generation payload
+        descn_gen_batch_inference_data = []
+        s3_uri_json = {}
+        count = 0
+        for s3_uri in image_base64_list:
+            # Get base64 string
+            image_base64 = image_base64_list[s3_uri]["base64"]
+            mime_type = image_base64_list[s3_uri]["mime_type"]
+            if mime_type == "image/jpeg":
+                format = "jpeg"
+            elif mime_type == "image/png":
+                format = "png"
+            elif mime_type == "image/webp":
+                format = "webp"
+            elif mime_type == "image/gif":
+                format = "gif"
+            else:
+                raise HTTPException(status_code=500, detail=f"Only support MIME type of image/jpeg, image/png, image/webp, image/gif. Got {mime_type} which is not supported.")
+            # Get current time
+            record_id = str(count).zfill(11)
+            descn_gen_payload = {
+                "recordId": record_id, 
+                "modelInput": {
+                    "schemaVersion": "messages-v1",
+                    "inferenceConfig": {"max_new_tokens": 5000},
+                    "messages": [
+                        {
+                            "role": "user",
+                            "content": [
+                                {
+                                    "image": {
+                                        "format": format,
+                                        "source": {"bytes": image_base64},
+                                    }
+                                },
+                                {
+                                    "text": "Generate description for the image"
                                 }
-                            },
-                            {
-                                "text": "Generate description for the image"
-                            }
-                        ],
-                    }
-                ]
+                            ],
+                        }
+                    ]
+                }
             }
-        }
-        descn_gen_batch_inference_data.append(descn_gen_payload)
-        image_base64_json[record_id] = image_base64
-    # Write to local jsonl file
-    with jsonlines.open(f'/tmp/{description_payload_file_name}', 'w') as writer:
-        writer.write_all(descn_gen_batch_inference_data)
-        s3_client.upload_file(f'/tmp/{description_payload_file_name}', Config.BUCKET_NAME, 'INVOCATION-INPUT-NO-IMAGE/'+description_payload_file_name)
-    # Create and start invocation job
-    descn_gen_response = bedrock_client.create_model_invocation_job(
-        roleArn=Config.BEDROCK_INVOKE_JOB_ROLE,
-        modelId=Config.MULTIMODEL_LLM_ID,
-        jobName=f"generate-description-{uuid_str}",
-        inputDataConfig=discriptionGeneratorInputDataConfig,
-        outputDataConfig=discriptionGeneratorOutputDataConfig
-    )
-    jobArn = descn_gen_response.get('jobArn')
-    # Write all base64 images to a json file
-    imgb64_file_name = f"{uuid_str}-{str(batch_num)}-imgb64.json"
-    with open("/tmp/"+imgb64_file_name, "w") as file:
-         json.dump(image_base64_json, file)
-         s3_client.upload_file("/tmp/"+imgb64_file_name, Config.BUCKET_NAME, 'IMAGE-BASE64-NO-IMAGE/'+imgb64_file_name)
-         file.close()
+            descn_gen_batch_inference_data.append(descn_gen_payload)
+            s3_uri_json[record_id] = s3_uri
+            count += 1
+        # Write to local jsonl file
+        with jsonlines.open(f'/tmp/{description_payload_file_name}', 'w') as writer:
+            logger.info(f"payload length {len(description_payload_file_name)}")
+            writer.write_all(descn_gen_batch_inference_data)
+            s3_client.upload_file(f'/tmp/{description_payload_file_name}', Config.BUCKET_NAME, 'INVOCATION-INPUT-NO-IMAGE/'+description_payload_file_name)
+        # Create and start invocation job
+        descn_gen_response = bedrock_client.create_model_invocation_job(
+            roleArn=Config.BEDROCK_INVOKE_JOB_ROLE,
+            modelId=Config.MULTIMODEL_LLM_ID,
+            jobName=f"generate-description-{uuid_str}",
+            inputDataConfig=discriptionGeneratorInputDataConfig,
+            outputDataConfig=discriptionGeneratorOutputDataConfig
+        )
+        jobArn = descn_gen_response.get('jobArn')
+        # Write all base64 images to a json file
+        s3uri_file_name = f"{uuid_str}-{str(batch_num)}-s3uri.json"
+        with open("/tmp/"+s3uri_file_name, "w") as file:
+            logger.info(f"s3 uri json length: {len(s3_uri_json)}")
+            s3_uri_jsonstr = json.dumps(s3_uri_json, indent=len(s3_uri_json))
+            file.write(s3_uri_jsonstr)
+            s3_client.upload_file("/tmp/"+s3uri_file_name, Config.BUCKET_NAME, 'S3-URI-NO-IMAGE/'+s3uri_file_name)
+            file.close()
 
-    return jobArn, output_directory, f"s3://{Config.BUCKET_NAME}/IMAGE-BASE64-NO-IMAGE/{imgb64_file_name}"
+        return jobArn, output_directory, f"s3://{Config.BUCKET_NAME}/S3-URI-NO-IMAGE/{s3uri_file_name}"
+    except (ClientError, Exception) as e:
+        raise HTTPException(status_code=500, detail=f"Error when creating invocation job: {str(e)}")

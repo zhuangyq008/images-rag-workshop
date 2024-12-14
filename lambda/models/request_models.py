@@ -18,10 +18,16 @@ class ImageSearchRequest(BaseModel):
     k: Optional[int] = 10
 
 class BatchUploadRequest(BaseModel):
-    s3_folder_prefix: str
+    batch_embedding_output: dict
 
 class BatchDescnEnrichRequest(BaseModel):
     s3_folder_prefix: str
+    batch_size: Optional[int] = 500
 
-class CheckBatchJobStateRequery(BaseModel):
+class BatchEmbeddingRequest(BaseModel):
+    generated_descn: bool
+    batch_descn_output: Optional[dict] = {}
+    s3_folder_prefix: Optional[str] = ""
+
+class CheckBatchJobStateRequest(BaseModel):
     jobArn_list: List[str]
