@@ -1,0 +1,16 @@
+# *.js
+!jest.config.js
+*.d.ts
+__pycache__/
+*.pyc
+node_modules
+lambda_layer
+lambda/lambda_layer
+lambda/__pycache__/
+lambda/utils/__pycache__/
+lambda/services/__pycache__/
+lambda/models/__pycache__/
+# CDK asset staging directory
+.cdk.staging
+cdk.out
+cdk.context.json
